@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - build: linux-amd64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - build: android-arm64
+            os: ubuntu-latest
+            target: aarch64-linux-android
+            no_run: --no-run
+          - build: android-amd64
+            os: ubuntu-latest
+            target: x86_64-linux-android
+            no_run: --no-run
+          - build: harmonyos-arm64
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-ohos
+            no_run: --no-run
+          - build: harmonyos-armv7
+            os: ubuntu-latest
+            target: armv7-unknown-linux-ohos
+            no_run: --no-run
+          - build: harmonyos-amd64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-ohos
+            no_run: --no-run
+          - build: macos-amd64
+            os: macos-latest
+            target: x86_64-apple-darwin
+          - build: macos-arm64
+            os: macos-14
+            target: aarch64-apple-darwin
+          - build: ios-arm64
+            os: macos-latest
+            target: aarch64-apple-ios
+            no_run: --no-run
+          - build: windows-amd64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - build: windows-arm64
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+            no_run: --no-run
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust (rustup)
+        run: |
+          set -euxo pipefail
+          rustup toolchain install stable --no-self-update --profile minimal --target ${{ matrix.target }}
+          rustup default stable
+        shell: bash
+      - uses: Swatinem/rust-cache@v2
+      - name: Setup android environment
+        if: contains(matrix.build, 'android')
+        uses: ./.github/actions/ndk-dev-rs
+        with:
+          rust-target: ${{ matrix.target }}
+      - name: Setup HarmonyOS environment
+        if: contains(matrix.build, 'harmonyos')
+        uses: openharmony-rs/setup-ohos-sdk@v0.1
+        id: setup-ohos
+        with:
+          version: '5.0.0'
+      - name: Run tests
+        run: |
+          if [ -n "${{ matrix.no_run }}" ]; then
+            cargo test ${{ matrix.no_run }} --target ${{ matrix.target }}
+            cargo test ${{ matrix.no_run }} --target ${{ matrix.target }} --release
+          else
+            cargo test --target ${{ matrix.target }}
+            cargo test --target ${{ matrix.target }} --release
+          fi
+        shell: bash
+
+  msrv_n_clippy:
+    name: MSRV & Clippy & Rustfmt
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt -- --check
+      - run: cargo clippy --all-features -- -D warnings
+      - run: cargo check --lib
+      - run: cargo check --lib --all-features
+
+  read_xmp_example:
+    name: ReadXMP example
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+      - name: Run example
+        run: cargo run --example read_xmp src/tests/fixtures/image2.jpg

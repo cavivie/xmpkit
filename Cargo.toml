@@ -1,0 +1,79 @@
+[package]
+name = "xmpkit"
+version = "0.1.0"
+edition = "2021"
+authors = ["XMPKit Contributors"]
+description = "Pure Rust implementation of Adobe XMP Toolkit"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/your-org/xmpkit"
+keywords = ["xmp", "metadata", "exif", "iptc"]
+categories = ["multimedia::images", "encoding"]
+
+[dependencies]
+quick-xml = { version = "0.38", features = ["serialize"], optional = true }
+thiserror = "2.0"
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+napi-ohos = { version = "1", optional = true }
+napi-derive-ohos = { version = "1", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+
+[features]
+default = ["mutli-thread", "full-formats"]
+
+# Core XMP functionality (parsing, serialization, metadata API)
+core = ["quick-xml"]
+
+# File format support infrastructure
+files = ["core"]
+
+# Individual file format handlers
+gif = ["files"]
+jpeg = ["files"]
+mp3 = ["files"]
+mp4 = ["files"]
+png = ["files"]
+tiff = ["files"]
+
+# Enable multi-threaded runtime support
+mutli-thread = []
+
+# Enable all file format handlers support
+full-formats = ["gif", "jpeg", "mp3", "mp4", "png", "tiff"]
+
+# WebAssembly JavaScript bindings (optional)
+wasm = ["wasm-bindgen", "js-sys", "serde", "serde_json"]
+
+# OpenHarmony/HarmonyOS Node-API bindings (optional)
+ohos = ["napi-ohos", "napi-derive-ohos", "napi-build-ohos", "serde", "serde_json"]
+
+[build-dependencies]
+napi-build-ohos = { version = "1", optional = true }
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+tempfile = "3.23"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "parse"
+harness = false
+
+[[bench]]
+name = "serialize"
+harness = false
+
+[[bench]]
+name = "file_io"
+harness = false
+
+[[bench]]
+name = "metadata_ops"
+harness = false
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_ohos)'] }
