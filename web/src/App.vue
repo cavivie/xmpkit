@@ -518,9 +518,11 @@ const logoPath = computed(() => {
     : theme.value
   
   // Use light logo (dark colors) for light theme, and dark logo (bright colors) for dark theme
+  // Use BASE_URL to support GitHub Pages subpath deployment
+  const baseUrl = import.meta.env.BASE_URL
   return currentTheme === 'light' 
-    ? '/assets/logo-icon-light.svg' 
-    : '/assets/logo-icon.svg'
+    ? `${baseUrl}assets/logo-icon-light.svg` 
+    : `${baseUrl}assets/logo-icon.svg`
 })
 
 // Computed property for favicon path based on theme
@@ -530,9 +532,11 @@ const faviconPath = computed(() => {
     : theme.value
   
   // Use favicon with circular background optimized for browser tabs
+  // Use BASE_URL to support GitHub Pages subpath deployment
+  const baseUrl = import.meta.env.BASE_URL
   return currentTheme === 'light' 
-    ? '/assets/favicon-light.svg' 
-    : '/assets/favicon.svg'
+    ? `${baseUrl}assets/favicon-light.svg` 
+    : `${baseUrl}assets/favicon.svg`
 })
 
 // Function to update favicon based on theme

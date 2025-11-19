@@ -57,15 +57,6 @@ meta.set_property("http://ns.adobe.com/xap/1.0/", "CreatorTool", "MyApp")?;
 let xmp_packet = meta.serialize();
 ```
 
-## Installation
-
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-xmpkit = "0.1.0"
-```
-
 ## Documentation
 
 Full API documentation is available at [docs.rs/xmpkit](https://docs.rs/xmpkit).
