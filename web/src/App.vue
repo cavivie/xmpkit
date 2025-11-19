@@ -7,15 +7,33 @@
           <h1>{{ $t('common.title') }}</h1>
         </div>
         <div class="header-actions">
-          <el-select v-model="locale" @change="changeLocale" class="locale-select">
-            <el-option label="中文" value="zh-CN" />
-            <el-option label="English" value="en-US" />
-          </el-select>
-          <el-tooltip :content="themeTooltip" placement="bottom">
+          <el-tooltip 
+            :content="localeTooltip" 
+            placement="bottom"
+            :trigger="isMobile ? 'manual' : 'hover'"
+            v-model:visible="localeTooltipVisible"
+            :hide-after="0"
+            :show-after="0"
+          >
+            <el-button
+              :icon="localeIcon"
+              circle
+              @click="handleLocaleClick"
+              class="locale-toggle-btn"
+            />
+          </el-tooltip>
+          <el-tooltip 
+            :content="themeTooltip" 
+            placement="bottom"
+            :trigger="isMobile ? 'manual' : 'hover'"
+            v-model:visible="themeTooltipVisible"
+            :hide-after="0"
+            :show-after="0"
+          >
             <el-button
               :icon="themeIcon"
               circle
-              @click="toggleTheme"
+              @click="handleThemeClick"
               class="theme-toggle-btn"
             />
           </el-tooltip>
@@ -110,19 +128,19 @@
       <!-- Namespace Management -->
       <el-collapse v-model="namespaceCollapseActiveNames" class="namespace-card">
         <el-collapse-item name="namespace-management" :title="$t('common.namespaceManagement')">
-          <el-form :inline="true" @submit.prevent="handleRegisterNamespace">
+          <el-form :inline="true" @submit.prevent="handleRegisterNamespace" class="namespace-form">
           <el-form-item :label="$t('common.namespaceUri')">
             <el-input
               v-model="namespaceForm.uri"
               :placeholder="$t('common.namespaceUri')"
-              style="width: 400px;"
+              class="namespace-uri-input"
             />
           </el-form-item>
           <el-form-item :label="$t('common.namespacePrefix')">
             <el-input
               v-model="namespaceForm.prefix"
               :placeholder="$t('common.namespacePrefix')"
-              style="width: 200px;"
+              class="namespace-prefix-input"
             />
           </el-form-item>
           <el-form-item>
@@ -242,7 +260,7 @@
               :placeholder="$t('common.propertyValue')"
             />
           </el-form-item>
-          <el-form-item>
+          <el-form-item class="edit-buttons">
             <el-button type="primary" @click="handleSetProperty">
               <el-icon><check /></el-icon>
               {{ $t('common.setProperty') }}
@@ -282,7 +300,8 @@ import {
   QuestionFilled,
   Sunny,
   Moon,
-  Monitor
+  Monitor,
+  Switch
 } from '@element-plus/icons-vue'
 import { useXmp } from './composables/useXmp'
 import { initWasm } from './utils/wasm'
@@ -291,6 +310,38 @@ const { locale, t } = useI18n()
 const uploadRef = ref()
 const namespaceCollapseActiveNames = ref<string[]>([]) // Empty array means collapsed by default
 const theme = ref<'auto' | 'light' | 'dark'>('auto')
+
+// Detect mobile device
+const isMobile = ref(false)
+const localeTooltipVisible = ref(false)
+const themeTooltipVisible = ref(false)
+
+const updateIsMobile = () => {
+  if (typeof window !== 'undefined') {
+    isMobile.value = window.innerWidth <= 768
+  }
+}
+
+const handleLocaleClick = () => {
+  toggleLocale()
+  if (isMobile.value) {
+    localeTooltipVisible.value = true
+    setTimeout(() => {
+      localeTooltipVisible.value = false
+    }, 1000)
+  }
+}
+
+const handleThemeClick = () => {
+  toggleTheme()
+  if (isMobile.value) {
+    themeTooltipVisible.value = true
+    setTimeout(() => {
+      themeTooltipVisible.value = false
+    }, 1000)
+  }
+}
+
 const filePreview = ref<{
   name: string
   size: string
@@ -464,6 +515,20 @@ const changeLocale = (val: string) => {
   locale.value = val
   localStorage.setItem('locale', val)
 }
+
+const toggleLocale = () => {
+  const newLocale = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'
+  changeLocale(newLocale)
+}
+
+const localeIcon = computed(() => {
+  // Use Switch icon for language switching
+  return Switch
+})
+
+const localeTooltip = computed(() => {
+  return locale.value === 'zh-CN' ? 'Switch to English' : '切换到中文'
+})
 
 const toggleTheme = () => {
   // Cycle through: auto -> light -> dark -> auto
@@ -659,6 +724,10 @@ watch(() => propertyForm.property, (newProperty) => {
 })
 
 onMounted(async () => {
+  // Initialize mobile detection
+  updateIsMobile()
+  window.addEventListener('resize', updateIsMobile)
+  
   // Get theme from localStorage or use 'auto'
   const savedTheme = localStorage.getItem('theme') as 'auto' | 'light' | 'dark' | null
   if (savedTheme && ['auto', 'light', 'dark'].includes(savedTheme)) {
@@ -716,6 +785,9 @@ onMounted(async () => {
   background: var(--color-background);
   min-height: 100vh;
   transition: background-color 0.3s ease;
+  box-sizing: border-box;
+  overflow-x: hidden; /* Prevent horizontal scroll */
+  width: 100%;
 }
 
 .el-header {
@@ -730,21 +802,29 @@ onMounted(async () => {
   min-height: 64px;
   border: 1px solid var(--color-border);
   transition: all 0.3s ease;
+  box-sizing: border-box;
+  overflow: hidden; /* Prevent content overflow */
+  width: 100%;
 }
 
 .header-content {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: center;
   width: 100%;
-  gap: 20px;
+  max-width: 100%;
+  gap: 16px;
+  box-sizing: border-box;
+  overflow: hidden; /* Prevent overflow */
 }
 
 .title-with-logo {
   display: flex;
   align-items: center;
   gap: 12px;
-  flex: 1;
+  min-width: 0; /* Allow text truncation */
+  overflow: hidden; /* Prevent overflow */
+  box-sizing: border-box;
 }
 
 .header-logo {
@@ -760,26 +840,44 @@ onMounted(async () => {
   font-size: 24px;
   font-weight: 600;
   transition: color 0.3s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  flex-shrink: 1;
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
+  flex-shrink: 0; /* Prevent shrinking */
+  flex-grow: 0; /* Prevent growing */
+  width: fit-content; /* Fixed width based on content */
 }
 
 .theme-toggle-btn {
   font-size: 18px;
   transition: transform 0.2s ease;
+  flex-shrink: 0;
 }
 
 .theme-toggle-btn:hover {
   transform: scale(1.1);
 }
 
-.locale-select {
-  width: 120px;
+.locale-toggle-btn {
   flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.theme-toggle-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
 }
 
 .el-main {
@@ -809,6 +907,22 @@ onMounted(async () => {
 .packet-card :deep(.el-card__body) {
   background: var(--color-card-bg);
   transition: background-color 0.3s ease;
+}
+
+/* Upload tip text - improve visibility in dark mode */
+.upload-card :deep(.el-upload__tip) {
+  color: var(--color-text);
+  transition: color 0.3s ease, opacity 0.3s ease;
+}
+
+:root.dark .upload-card :deep(.el-upload__tip) {
+  opacity: 0.85;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .upload-card :deep(.el-upload__tip) {
+    opacity: 0.85;
+  }
 }
 
 .upload-card :deep(.el-card__header),
@@ -896,7 +1010,29 @@ onMounted(async () => {
   color: var(--color-text);
   word-break: break-all;
   opacity: 0.8;
-  transition: color 0.3s ease;
+  transition: color 0.3s ease, opacity 0.3s ease;
+}
+
+/* Improve visibility in dark mode */
+:root.dark .namespace-uri {
+  opacity: 0.95;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .namespace-uri {
+    opacity: 0.95;
+  }
+}
+
+/* Namespace form inputs */
+.namespace-uri-input {
+  width: 400px;
+  max-width: 100%;
+}
+
+.namespace-prefix-input {
+  width: 200px;
+  max-width: 100%;
 }
 
 .xmp-packet {
@@ -1029,5 +1165,481 @@ onMounted(async () => {
 
 :deep(.el-scrollbar__bar:hover) {
   opacity: 1;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  /* Improve touch targets */
+  :deep(.el-button),
+  :deep(.el-select),
+  :deep(.el-input),
+  :deep(.el-textarea) {
+    min-height: 44px; /* iOS recommended touch target size */
+  }
+
+  /* Header adjustments */
+  .el-header {
+    padding: 12px 16px;
+    min-height: 56px;
+  }
+
+  .header-content {
+    gap: 12px;
+    overflow: hidden; /* Prevent overflow */
+    max-width: 100%;
+  }
+
+  .title-with-logo {
+    gap: 8px;
+    min-width: 0; /* Allow flex shrinking */
+    overflow: hidden; /* Prevent overflow */
+    box-sizing: border-box;
+  }
+
+  .header-logo {
+    width: 36px;
+    height: 36px;
+  }
+
+  .el-header h1 {
+    font-size: 18px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .header-actions {
+    gap: 6px;
+    flex-shrink: 0;
+    flex-grow: 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    width: fit-content;
+  }
+
+  .locale-toggle-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 13px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .theme-toggle-btn {
+    font-size: 16px;
+    flex-shrink: 0;
+    width: 36px; /* Fixed width for circle button */
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  /* Main content padding */
+  .el-main {
+    padding: 0 12px;
+  }
+
+  /* Card spacing */
+  .upload-card,
+  .preview-card,
+  .controls-card,
+  .xmp-card,
+  .namespace-card,
+  .edit-card,
+  .packet-card {
+    margin-bottom: 16px;
+    border-radius: 8px;
+  }
+
+  .upload-card :deep(.el-card__header),
+  .preview-card :deep(.el-card__header),
+  .controls-card :deep(.el-card__header),
+  .xmp-card :deep(.el-card__header),
+  .edit-card :deep(.el-card__header),
+  .packet-card :deep(.el-card__header) {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .upload-card :deep(.el-card__body),
+  .preview-card :deep(.el-card__body),
+  .controls-card :deep(.el-card__body),
+  .xmp-card :deep(.el-card__body),
+  .edit-card :deep(.el-card__body),
+  .packet-card :deep(.el-card__body) {
+    padding: 16px;
+  }
+
+  /* Upload area */
+  .upload-card :deep(.el-upload-dragger) {
+    padding: 30px 20px;
+  }
+
+  .upload-card :deep(.el-icon--upload) {
+    font-size: 48px;
+  }
+
+  .upload-card :deep(.el-upload__text) {
+    font-size: 14px;
+    margin-top: 12px;
+  }
+
+  .upload-card :deep(.el-upload__tip) {
+    font-size: 12px;
+    margin-top: 8px;
+  }
+
+  /* Preview container */
+  .preview-container {
+    padding: 16px;
+  }
+
+  .preview-container img,
+  .preview-container video {
+    max-height: 400px;
+  }
+
+  .preview-container audio {
+    max-width: 100%;
+  }
+
+  .file-placeholder {
+    padding: 24px;
+  }
+
+  /* Operation buttons - stack vertically on mobile */
+  .controls-card :deep(.el-card__body) {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch; /* Ensure buttons stretch to full width */
+  }
+
+  .controls-card :deep(.el-button) {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 20px;
+    font-size: 14px;
+    margin: 0; /* Remove any default margins */
+  }
+
+  /* Edit buttons - stack vertically on mobile */
+  .edit-buttons {
+    margin-top: 16px;
+    margin-bottom: 0;
+  }
+
+  .edit-buttons :deep(.el-form-item__content) {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .edit-buttons :deep(.el-button) {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 20px;
+    font-size: 14px;
+    margin: 0 !important; /* Remove any default margins */
+  }
+
+  /* Descriptions - single column on mobile */
+  :deep(.el-descriptions) {
+    --el-descriptions-table-border: 1px solid var(--color-border);
+  }
+
+  :deep(.el-descriptions__label) {
+    width: 30% !important;
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+
+  :deep(.el-descriptions__content) {
+    font-size: 13px;
+    padding: 8px 12px;
+    word-break: break-word;
+  }
+
+  /* Tables - make scrollable on mobile */
+  :deep(.el-table) {
+    font-size: 13px;
+    overflow-x: auto;
+    display: block;
+    width: 100%;
+  }
+
+  :deep(.el-table__body-wrapper),
+  :deep(.el-table__header-wrapper) {
+    overflow-x: auto;
+  }
+
+  :deep(.el-table th),
+  :deep(.el-table td) {
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+
+  :deep(.el-table th:last-child),
+  :deep(.el-table td:last-child) {
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  /* Form inputs */
+  :deep(.el-input) {
+    font-size: 14px;
+  }
+
+  :deep(.el-textarea__inner) {
+    font-size: 14px;
+    padding: 8px 12px;
+  }
+
+  /* Namespace card */
+  .namespace-card :deep(.el-collapse-item__header) {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .namespace-card :deep(.el-collapse-item__content) {
+    padding: 16px;
+  }
+
+  /* Namespace form - stack vertically on mobile */
+  .namespace-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .namespace-form :deep(.el-form-item) {
+    margin-bottom: 0;
+    width: 100%;
+  }
+
+  .namespace-form :deep(.el-form-item__label) {
+    width: auto !important;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .namespace-uri-input,
+  .namespace-prefix-input {
+    width: 100% !important;
+    max-width: 100%;
+  }
+
+  .namespace-table-header {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  .namespace-uri {
+    font-size: 11px;
+  }
+
+  /* XMP Packet display */
+  .xmp-packet {
+    padding: 12px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  /* Button groups */
+  :deep(.el-button-group) {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  :deep(.el-button-group .el-button) {
+    width: 100%;
+    margin-left: 0 !important;
+    margin-top: 8px;
+  }
+
+  :deep(.el-button-group .el-button:first-child) {
+    margin-top: 0;
+  }
+
+  /* Dialog adjustments */
+  :deep(.el-dialog) {
+    width: 90% !important;
+    margin: 5vh auto !important;
+  }
+
+  :deep(.el-dialog__header) {
+    padding: 16px;
+  }
+
+  :deep(.el-dialog__body) {
+    padding: 16px;
+    font-size: 14px;
+  }
+
+  :deep(.el-dialog__footer) {
+    padding: 12px 16px;
+  }
+
+  /* Tag adjustments */
+  :deep(.el-tag) {
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+}
+
+/* Extra small devices (phones, less than 480px) */
+@media (max-width: 480px) {
+  .el-header {
+    padding: 10px 12px;
+    min-height: 52px;
+  }
+
+  .header-logo {
+    width: 32px;
+    height: 32px;
+  }
+
+  .el-header h1 {
+    font-size: 16px;
+  }
+
+  .header-actions {
+    gap: 4px;
+    flex-shrink: 0;
+    flex-grow: 0;
+    width: fit-content;
+  }
+
+  .locale-toggle-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .theme-toggle-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .el-main {
+    padding: 0 8px;
+  }
+
+  .upload-card,
+  .preview-card,
+  .controls-card,
+  .xmp-card,
+  .namespace-card,
+  .edit-card,
+  .packet-card {
+    margin-bottom: 12px;
+    border-radius: 6px;
+  }
+
+  .upload-card :deep(.el-card__header),
+  .preview-card :deep(.el-card__header),
+  .controls-card :deep(.el-card__header),
+  .xmp-card :deep(.el-card__header),
+  .edit-card :deep(.el-card__header),
+  .packet-card :deep(.el-card__header) {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .upload-card :deep(.el-card__body),
+  .preview-card :deep(.el-card__body),
+  .controls-card :deep(.el-card__body),
+  .xmp-card :deep(.el-card__body),
+  .edit-card :deep(.el-card__body),
+  .packet-card :deep(.el-card__body) {
+    padding: 12px;
+  }
+
+  .preview-container img,
+  .preview-container video {
+    max-height: 300px;
+  }
+
+  .controls-card :deep(.el-button) {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .edit-buttons :deep(.el-button) {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  :deep(.el-descriptions__label) {
+    width: 35% !important;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  :deep(.el-descriptions__content) {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  :deep(.el-dialog) {
+    width: 95% !important;
+  }
+}
+
+/* Landscape orientation on mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+  .preview-container img,
+  .preview-container video {
+    max-height: 50vh;
+  }
+}
+
+/* Mobile-specific improvements */
+@media (max-width: 768px) {
+  /* Smooth scrolling */
+  html {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent text selection on buttons for better touch experience */
+  .controls-card :deep(.el-button) {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  /* Improve upload area touch interaction */
+  .upload-card :deep(.el-upload-dragger) {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Better scrollbar visibility on mobile */
+  :deep(.el-scrollbar__bar) {
+    opacity: 0.8;
+  }
+
+  /* Prevent horizontal scroll on body */
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Ensure cards don't overflow */
+  .upload-card,
+  .preview-card,
+  .controls-card,
+  .xmp-card,
+  .namespace-card,
+  .edit-card,
+  .packet-card {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
 }
 </style>
