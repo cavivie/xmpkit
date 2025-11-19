@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["XMPKit Contributors"]
 description = "Pure Rust implementation of Adobe XMP Toolkit"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/your-org/xmpkit"
+repository = "https://github.com/cavivie/xmpkit"
 keywords = ["xmp", "metadata", "exif", "iptc"]
 categories = ["multimedia::images", "encoding"]
 
