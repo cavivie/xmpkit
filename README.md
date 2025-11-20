@@ -40,21 +40,43 @@ XMPKit is a pure Rust implementation of Adobe's XMP (Extensible Metadata Platfor
 ## Quick Start
 
 ```rust
-use xmpkit::XmpMeta;
+use xmpkit::{XmpFile, XmpMeta, register_namespace};
 
-// Parse XMP from string
-let meta = XmpMeta::from_str(xmp_str)?;
+// Open an image file
+let mut file = XmpFile::new();
+file.open("photo.jpg")?;
 
-// Get a property
-if let Some(value) = meta.get_property("http://ns.adobe.com/xap/1.0/", "CreatorTool") {
-    println!("Creator: {}", value);
+// Read XMP metadata
+if let Some(meta) = file.get_xmp() {
+    // Get image title (Dublin Core namespace - built-in, no registration needed)
+    if let Some(title) = meta.get_property("http://purl.org/dc/elements/1.1/", "title") {
+        println!("Title: {}", title);
+    }
+
+    // Get creator tool (XMP namespace - built-in, no registration needed)
+    if let Some(creator) = meta.get_property("http://ns.adobe.com/xap/1.0/", "CreatorTool") {
+        println!("Created with: {}", creator);
+    }
 }
 
-// Set a property
-meta.set_property("http://ns.adobe.com/xap/1.0/", "CreatorTool", "MyApp")?;
+// Modify metadata
+if let Some(mut meta) = file.get_xmp().cloned() {
+    // Set image title (built-in namespace, no registration needed)
+    meta.set_property("http://purl.org/dc/elements/1.1/", "title", "My Photo")?;
 
-// Serialize back to XMP Packet
-let xmp_packet = meta.serialize();
+    // Set creator tool (built-in namespace, no registration needed)
+    meta.set_property("http://ns.adobe.com/xap/1.0/", "CreatorTool", "MyApp v1.0")?;
+
+    // For custom namespaces, register first before setting properties
+    register_namespace("http://example.com/myapp/1.0/", "myapp")?;
+    meta.set_property("http://example.com/myapp/1.0/", "CustomProperty", "Custom Value")?;
+
+    // Update metadata in file
+    file.put_xmp(meta);
+}
+
+// Save the modified image
+file.save("photo_updated.jpg")?;
 ```
 
 ## Documentation
