@@ -165,7 +165,7 @@
 //! const result = read_xmp(new Uint8Array(/* file bytes */));
 //! ```
 //!
-//! **Alternative**: Create a custom binding crate (see `docs/WASM_JAVASCRIPT.md` for details)
+//! **Alternative**: Create a custom binding crate (see `docs/WEBASSEMBLY.md` for details)
 //!
 //! ### OpenHarmony/HarmonyOS (ArkTS)
 //!

@@ -83,7 +83,7 @@ file.save("photo_updated.jpg")?;
 
 Full API documentation is available at [docs.rs/xmpkit](https://docs.rs/xmpkit).
 
-For WebAssembly/JavaScript integration, see [WASM_JAVASCRIPT.md](docs/WASM_JAVASCRIPT.md).
+For WebAssembly/JavaScript integration, see [WEBASSEMBLY.md](docs/WEBASSEMBLY.md), [here is a online demo](https://cavivie.github.io/xmpkit).
 
 ## Project Status
 
@@ -112,7 +112,7 @@ For WebAssembly/JavaScript integration, see [WASM_JAVASCRIPT.md](docs/WASM_JAVAS
 | Android | arm64, armv7, x86_64 | Yes | Yes | Fully supported |
 | HarmonyOS | arm64, armv7, x86_64 | Yes | Yes | Fully supported (use `ohos` feature for Node-API bindings) |
 | **Web Platforms** |
-| WebAssembly | wasm32 | No | Yes | Partial (use `from_bytes()` / `from_reader()`, see [WASM_WEBASSEMBLY](docs/WEB_ASSEMBLY.md)) |
+| WebAssembly | wasm32 | No | Yes | Partial (use `from_bytes()` / `from_reader()`, see [WEBASSEMBLY](docs/WEBASSEMBLY.md)) |
 
 ## Contributing
 
@@ -130,5 +130,5 @@ at your option.
 ## References
 
 - [Adobe XMP Toolkit SDK - Rust](https://github.com/adobe/xmp-toolkit-rs)
-- [Adobe XMP Toolkit SDK](https://github.com/adobe/XMP-Toolkit-SDK)
+- [Adobe XMP Toolkit SDK - C++](https://github.com/adobe/XMP-Toolkit-SDK)
 - [XMP Specification](https://www.adobe.com/devnet/xmp.html)
