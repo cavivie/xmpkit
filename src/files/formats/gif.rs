@@ -310,12 +310,10 @@ impl GifHandler {
             // so we only write packet data + magic trailer, not the extension header
             Self::write_xmp_packet_data(&mut writer, xmp_bytes)?;
 
-            // Skip old XMP packet (data + magic trailer + terminator)
+            // Skip old XMP packet (data + magic trailer)
             if let Some(old_length) = xmp_packet_length {
                 const MAGIC_TRAILER_LEN: u64 = 258;
-                reader.seek(SeekFrom::Current(
-                    (old_length + MAGIC_TRAILER_LEN + 1) as i64,
-                ))?;
+                reader.seek(SeekFrom::Current((old_length + MAGIC_TRAILER_LEN) as i64))?;
             }
 
             // Copy rest of file
@@ -553,16 +551,15 @@ impl GifHandler {
         // Write XMP packet data directly
         writer.write_all(xmp_bytes)?;
 
-        // Write magic trailer directly (258 bytes: 0x01 + 0xFF..0x01 + 0x00 + 0x00)
-        // Format: 0x01, then 0xFF down to 0x01, then 0x00, 0x00
+        // Write magic trailer directly (258 bytes: 0x01 + 0xFF..0x00 + 0x00)
+        // Format: 0x01, then 0xFF down to 0x00, then 0x00 (sub-block terminator)
         writer.write_all(&[0x01])?;
-        for byte in (0x01..=0xFF).rev() {
+        for byte in (0x00..=0xFF).rev() {
             writer.write_all(&[byte])?;
         }
-        writer.write_all(&[0x00, 0x00])?;
 
         // End of extension data (sub-block terminator)
-        writer.write_all(&[0])?;
+        writer.write_all(&[0x00])?;
 
         Ok(())
     }
