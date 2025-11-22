@@ -585,3 +585,78 @@ impl GifHandler {
         Self::write_xmp_packet_data(writer, xmp_bytes)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    // Minimal valid GIF file with no XMP
+    fn create_minimal_gif() -> Vec<u8> {
+        let mut gif = Vec::new();
+        // File signature: b"GIF89a"
+        gif.extend_from_slice(GIF_SIGNATURE_89A);
+        // Logical screen descriptor: 7 bytes, unused by GifHandler
+        gif.extend_from_slice(&[
+            0x03, 0x00, // Width
+            0x05, 0x00, // Height
+            0x00, // Color table offset
+            0x00, // Background color
+            0x00, // Aspect ratio
+        ]);
+        // Image data
+        gif.extend_from_slice(&[
+            0x2C, // Image block label
+            0x00, 0x00, 0x00, 0x00, // Top-left image start
+            0x03, 0x00, 0x05, 0x00, // 3x5 image
+            0x00, // Color bit, no color necessary for testing
+            0x08, // LZW start
+            0x0B, // Image data length
+            0x00, 0x51, 0xFC, 0x1B, 0x28, 0x70, 0xA0, 0xC1, 0x83, 0x01, 0x01, // Image data
+            0x00, // Image end
+        ]);
+        // Trailer
+        gif.extend_from_slice(&[0x3B]);
+        gif
+    }
+
+    #[test]
+    fn test_read_xmp_no_xmp() {
+        let gif_data = create_minimal_gif();
+        let reader = Cursor::new(gif_data);
+        let xmp = GifHandler::read_xmp(reader).unwrap();
+        assert!(xmp.is_none());
+    }
+
+    #[test]
+    fn test_invalid_gif() {
+        let invalid_data = vec![0x00, 0x01, 0x02, 0x03];
+        let reader = Cursor::new(invalid_data);
+        let result = GifHandler::read_xmp(reader);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_write_xmp() {
+        use crate::{ns, XmpValue};
+
+        let gif_data = create_minimal_gif();
+        let mut input = crate::XmpMeta::new();
+        input
+            .set_property(ns::DC, "title", XmpValue::String("Test GIF".to_string()))
+            .unwrap();
+
+        let mut reader = Cursor::new(gif_data.clone());
+        let mut writer = Cursor::new(gif_data);
+
+        GifHandler::write_xmp(&mut reader, &mut writer, &input).unwrap();
+
+        let new_reader = Cursor::new(writer.into_inner());
+        let output = GifHandler::read_xmp(new_reader).unwrap().unwrap();
+
+        assert_eq!(
+            input.serialize_packet().unwrap(),
+            output.serialize_packet().unwrap(),
+        );
+    }
+}
