@@ -349,6 +349,85 @@ impl PngHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::metadata::XmpMeta;
+    use crate::core::namespace::ns;
+    use crate::types::value::XmpValue;
+    use std::io::Cursor;
+
+    // Minimal valid PNG file with no XMP (signature + minimal IHDR + IEND)
+    fn create_minimal_png() -> Vec<u8> {
+        let mut png = Vec::new();
+        // PNG signature
+        png.extend_from_slice(PNG_SIGNATURE);
+        // IHDR chunk: length (13), type, data (13 bytes), CRC
+        let ihdr_length = 13u32.to_be_bytes();
+        png.extend_from_slice(&ihdr_length);
+        png.extend_from_slice(b"IHDR");
+        // IHDR data: Width: 1, Height: 1, Bit depth: 8, Color type: 2 (RGB), Compression: 0, Filter: 0, Interlace: 0
+        png.extend_from_slice(&1u32.to_be_bytes()); // width
+        png.extend_from_slice(&1u32.to_be_bytes()); // height
+        png.push(8); // bit depth
+        png.push(2); // color type (RGB)
+        png.push(0); // compression
+        png.push(0); // filter
+        png.push(0); // interlace
+                     // Calculate CRC for IHDR chunk (type + data)
+        let ihdr_crc_data = [b"IHDR", &png[png.len() - 13..]].concat();
+        let ihdr_crc = PngHandler::calculate_crc(&ihdr_crc_data);
+        png.extend_from_slice(&ihdr_crc.to_be_bytes());
+        // IEND chunk
+        png.extend_from_slice(&0u32.to_be_bytes());
+        png.extend_from_slice(CHUNK_TYPE_IEND);
+        let iend_crc = PngHandler::calculate_crc(CHUNK_TYPE_IEND);
+        png.extend_from_slice(&iend_crc.to_be_bytes());
+        png
+    }
+
+    #[test]
+    fn test_read_xmp_no_xmp() {
+        let png_data = create_minimal_png();
+        let reader = Cursor::new(png_data);
+        let result = PngHandler::read_xmp(reader).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_invalid_png() {
+        let invalid_data = vec![0x00, 0x01, 0x02, 0x03];
+        let reader = Cursor::new(invalid_data);
+        let result = PngHandler::read_xmp(reader);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_write_xmp() {
+        // Create minimal PNG
+        let png_data = create_minimal_png();
+        let reader = Cursor::new(png_data);
+        let mut writer = Cursor::new(Vec::new());
+
+        // Create XMP metadata
+        let mut meta = XmpMeta::new();
+        meta.set_property(ns::DC, "title", XmpValue::String("Test Image".to_string()))
+            .unwrap();
+
+        // Write XMP
+        PngHandler::write_xmp(reader, &mut writer, &meta).unwrap();
+
+        // Read back XMP
+        writer.set_position(0);
+        let result = PngHandler::read_xmp(writer).unwrap();
+        assert!(result.is_some());
+
+        let read_meta = result.unwrap();
+        let title_value = read_meta.get_property(ns::DC, "title");
+        assert!(title_value.is_some());
+        if let Some(XmpValue::String(title)) = title_value {
+            assert_eq!(title, "Test Image");
+        } else {
+            panic!("Expected string value");
+        }
+    }
 
     #[test]
     fn test_is_xmp_itxt() {

@@ -1336,3 +1336,70 @@ impl Mp4Handler {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::metadata::XmpMeta;
+    use crate::core::namespace::ns;
+    use crate::types::value::XmpValue;
+    use std::io::Cursor;
+
+    // Minimal valid MP4 file with ftyp box but no XMP
+    fn create_minimal_mp4() -> Vec<u8> {
+        let mut mp4 = Vec::new();
+        // ftyp box: size (20), type ("ftyp"), major brand ("isom"), minor version (0), compatible brands ("isom")
+        mp4.extend_from_slice(&20u32.to_be_bytes()); // box size
+        mp4.extend_from_slice(MP4_SIGNATURE); // "ftyp"
+        mp4.extend_from_slice(b"isom"); // major brand
+        mp4.extend_from_slice(&0u32.to_be_bytes()); // minor version
+        mp4.extend_from_slice(b"isom"); // compatible brand
+        mp4
+    }
+
+    #[test]
+    fn test_read_xmp_no_xmp() {
+        let mp4_data = create_minimal_mp4();
+        let reader = Cursor::new(mp4_data);
+        let result = Mp4Handler::read_xmp(reader).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_invalid_mp4() {
+        let invalid_data = vec![0x00, 0x01, 0x02, 0x03];
+        let reader = Cursor::new(invalid_data);
+        let result = Mp4Handler::read_xmp(reader);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_write_xmp() {
+        // Create minimal MP4
+        let mp4_data = create_minimal_mp4();
+        let reader = Cursor::new(mp4_data);
+        let mut writer = Cursor::new(Vec::new());
+
+        // Create XMP metadata
+        let mut meta = XmpMeta::new();
+        meta.set_property(ns::DC, "title", XmpValue::String("Test Video".to_string()))
+            .unwrap();
+
+        // Write XMP
+        Mp4Handler::write_xmp(reader, &mut writer, &meta).unwrap();
+
+        // Read back XMP
+        writer.set_position(0);
+        let result = Mp4Handler::read_xmp(writer).unwrap();
+        assert!(result.is_some());
+
+        let read_meta = result.unwrap();
+        let title_value = read_meta.get_property(ns::DC, "title");
+        assert!(title_value.is_some());
+        if let Some(XmpValue::String(title)) = title_value {
+            assert_eq!(title, "Test Video");
+        } else {
+            panic!("Expected string value");
+        }
+    }
+}
