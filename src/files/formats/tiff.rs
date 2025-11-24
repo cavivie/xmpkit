@@ -447,6 +447,9 @@ impl TiffHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::metadata::XmpMeta;
+    use crate::core::namespace::ns;
+    use crate::types::value::XmpValue;
     use std::io::Cursor;
 
     // Minimal valid TIFF file (little-endian) with no XMP
@@ -475,5 +478,47 @@ mod tests {
         let reader = Cursor::new(invalid_data);
         let result = TiffHandler::read_xmp(reader);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_write_xmp() {
+        // Create minimal TIFF with a dummy IFD entry to make write_xmp work
+        let mut tiff = Vec::new();
+        // Header: II/42 + first IFD offset (8)
+        tiff.extend_from_slice(&[0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00]);
+        // IFD: entry count (1) - need at least one entry for write_xmp to work
+        tiff.extend_from_slice(&[0x01, 0x00]);
+        // Dummy entry: tag (256 = ImageWidth), type (3 = SHORT), count (1), value (100)
+        tiff.extend_from_slice(&[0x00, 0x01]); // tag
+        tiff.extend_from_slice(&[0x00, 0x03]); // type
+        tiff.extend_from_slice(&[0x01, 0x00, 0x00, 0x00]); // count
+        tiff.extend_from_slice(&[0x64, 0x00, 0x00, 0x00]); // value (100 as u16 in little-endian)
+                                                           // Next IFD offset (0 = end)
+        tiff.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
+
+        let reader = Cursor::new(tiff);
+        let mut writer = Cursor::new(Vec::new());
+
+        // Create XMP metadata
+        let mut meta = XmpMeta::new();
+        meta.set_property(ns::DC, "title", XmpValue::String("Test Image".to_string()))
+            .unwrap();
+
+        // Write XMP
+        TiffHandler::write_xmp(reader, &mut writer, &meta).unwrap();
+
+        // Read back XMP
+        writer.set_position(0);
+        let result = TiffHandler::read_xmp(writer).unwrap();
+        assert!(result.is_some());
+
+        let read_meta = result.unwrap();
+        let title_value = read_meta.get_property(ns::DC, "title");
+        assert!(title_value.is_some());
+        if let Some(XmpValue::String(title)) = title_value {
+            assert_eq!(title, "Test Image");
+        } else {
+            panic!("Expected string value");
+        }
     }
 }

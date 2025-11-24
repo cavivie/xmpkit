@@ -484,6 +484,61 @@ impl JpegHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::metadata::XmpMeta;
+    use crate::core::namespace::ns;
+    use crate::types::value::XmpValue;
+    use std::io::Cursor;
+
+    // Minimal valid JPEG file with no XMP (SOI + EOI)
+    fn create_minimal_jpeg() -> Vec<u8> {
+        vec![0xFF, MARKER_SOI, 0xFF, MARKER_EOI]
+    }
+
+    #[test]
+    fn test_read_xmp_no_xmp() {
+        let jpeg_data = create_minimal_jpeg();
+        let reader = Cursor::new(jpeg_data);
+        let result = JpegHandler::read_xmp(reader).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_invalid_jpeg() {
+        let invalid_data = vec![0x00, 0x01, 0x02, 0x03];
+        let reader = Cursor::new(invalid_data);
+        let result = JpegHandler::read_xmp(reader);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_write_xmp() {
+        // Create minimal JPEG
+        let jpeg_data = create_minimal_jpeg();
+        let reader = Cursor::new(jpeg_data);
+        let mut writer = Cursor::new(Vec::new());
+
+        // Create XMP metadata
+        let mut meta = XmpMeta::new();
+        meta.set_property(ns::DC, "title", XmpValue::String("Test Image".to_string()))
+            .unwrap();
+
+        // Write XMP
+        JpegHandler::write_xmp(reader, &mut writer, &meta).unwrap();
+
+        // Read back XMP
+        writer.set_position(0);
+        let result = JpegHandler::read_xmp(writer).unwrap();
+        assert!(result.is_some());
+
+        let read_meta = result.unwrap();
+        let title_value = read_meta.get_property(ns::DC, "title");
+        assert!(title_value.is_some());
+        if let Some(XmpValue::String(title)) = title_value {
+            assert_eq!(title, "Test Image");
+        } else {
+            panic!("Expected string value");
+        }
+    }
 
     #[test]
     fn test_is_xmp_segment() {

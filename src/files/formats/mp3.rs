@@ -495,6 +495,77 @@ impl Mp3Handler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::metadata::XmpMeta;
+    use crate::core::namespace::ns;
+    use crate::types::value::XmpValue;
+    use std::io::Cursor;
+
+    // Minimal valid MP3 file with ID3v2 header but no XMP
+    fn create_minimal_mp3() -> Vec<u8> {
+        let mut mp3 = Vec::new();
+        // ID3v2.3 header: "ID3" + version (03 00) + flags (00) + size (00 00 00 00)
+        mp3.extend_from_slice(b"ID3");
+        mp3.extend_from_slice(&[0x03, 0x00]); // version 2.3
+        mp3.push(0x00); // flags
+        mp3.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]); // size (synchsafe, 0 = no frames)
+        mp3
+    }
+
+    #[test]
+    fn test_read_xmp_no_xmp() {
+        let mp3_data = create_minimal_mp3();
+        let reader = Cursor::new(mp3_data);
+        let result = Mp3Handler::read_xmp(reader).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_invalid_mp3() {
+        // Test with data that's too short to read ID3v2 header (10 bytes)
+        let invalid_data = vec![0x00, 0x01, 0x02, 0x03];
+        let reader = Cursor::new(invalid_data);
+        let result = Mp3Handler::read_xmp(reader);
+        // MP3 handler returns error when data is too short to read header
+        assert!(result.is_err());
+
+        // Test with data that has enough bytes but no ID3 tag
+        let no_id3_data = vec![0x00; 10];
+        let reader2 = Cursor::new(no_id3_data);
+        let result2 = Mp3Handler::read_xmp(reader2);
+        // MP3 handler returns Ok(None) for files without ID3 tag
+        assert!(result2.is_ok());
+        assert!(result2.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_write_xmp() {
+        // Create minimal MP3 (with empty ID3v2 tag)
+        let mp3_data = create_minimal_mp3();
+        let reader = Cursor::new(mp3_data.clone());
+        let mut writer = Cursor::new(Vec::new());
+
+        // Create XMP metadata
+        let mut meta = XmpMeta::new();
+        meta.set_property(ns::DC, "title", XmpValue::String("Test Audio".to_string()))
+            .unwrap();
+
+        // Write XMP
+        Mp3Handler::write_xmp(reader, &mut writer, &meta).unwrap();
+
+        // Read back XMP
+        writer.set_position(0);
+        let result = Mp3Handler::read_xmp(writer).unwrap();
+        assert!(result.is_some(), "XMP should be readable after write");
+
+        let read_meta = result.unwrap();
+        let title_value = read_meta.get_property(ns::DC, "title");
+        assert!(title_value.is_some());
+        if let Some(XmpValue::String(title)) = title_value {
+            assert_eq!(title, "Test Audio");
+        } else {
+            panic!("Expected string value");
+        }
+    }
 
     #[test]
     fn test_synchsafe_u32() {
