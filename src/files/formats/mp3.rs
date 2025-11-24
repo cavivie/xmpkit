@@ -225,7 +225,10 @@ impl Mp3Handler {
             XMP_V23_ID
         };
 
-        // Copy tag header
+        // Save header position to update tag size later
+        let header_pos = writer.stream_position()?;
+        
+        // Copy tag header (will update size later)
         writer.write_all(&header)?;
 
         // Skip extended header if present
@@ -276,6 +279,15 @@ impl Mp3Handler {
             }
         }
 
+        // Calculate new tag size
+        let mut new_tag_size = 0u32;
+        for (frame_header, frame_content) in &other_frames {
+            new_tag_size += frame_header.len() as u32 + frame_content.len() as u32;
+        }
+        // Add XMP frame size
+        let xmp_frame_size = frame_header_size as u32 + frame_content.len() as u32;
+        new_tag_size += xmp_frame_size;
+
         // Write all other frames
         for (frame_header, frame_content) in &other_frames {
             writer.write_all(frame_header)?;
@@ -284,6 +296,14 @@ impl Mp3Handler {
 
         // Write XMP frame
         Self::write_xmp_frame(writer, major_version, &frame_content)?;
+
+        // Update tag size in header
+        let current_pos = writer.stream_position()?;
+        writer.seek(SeekFrom::Start(header_pos))?;
+        writer.write_all(&header[0..6])?; // Write ID3 + version + flags
+        Self::write_synchsafe_u32(&mut header[6..10], new_tag_size)?;
+        writer.write_all(&header[6..10])?; // Write updated size
+        writer.seek(SeekFrom::Start(current_pos))?;
 
         // Copy rest of file
         reader.seek(SeekFrom::Start(tag_start + tag_size as u64))?;
