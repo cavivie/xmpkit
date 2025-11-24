@@ -227,7 +227,7 @@ impl Mp3Handler {
 
         // Save header position to update tag size later
         let header_pos = writer.stream_position()?;
-        
+
         // Copy tag header (will update size later)
         writer.write_all(&header)?;
 
