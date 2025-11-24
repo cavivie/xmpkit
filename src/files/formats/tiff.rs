@@ -280,6 +280,9 @@ impl TiffHandler {
         byte_order: ByteOrder,
         xmp_bytes: &[u8],
     ) -> XmpResult<()> {
+        // Save IFD position (where we'll write the IFD later)
+        let ifd_start = writer.stream_position()?;
+
         // Read entry count
         let mut count_bytes = [0u8; 2];
         reader.read_exact(&mut count_bytes)?;
@@ -304,21 +307,23 @@ impl TiffHandler {
         reader.read_exact(&mut next_ifd_bytes)?;
         let next_ifd_offset = Self::read_u32(&next_ifd_bytes, byte_order)?;
 
+        // Calculate IFD size: 2 (entry count) + entries.len() * 12 + 4 (next IFD offset)
+        // Note: We need to account for the new XMP entry if not found
+        let entries_count = if xmp_found {
+            entries.len()
+        } else {
+            entries.len() + 1
+        };
+        let ifd_size = 2 + (entries_count as u32) * 12 + 4;
+
         // Determine where to write XMP data
-        let current_end = writer.stream_position()?;
         let xmp_data_offset = if xmp_found {
             // Replace existing XMP - use same offset if possible
             entries[xmp_entry_index.unwrap()].value_or_offset
         } else {
-            // Append new XMP entry
-            current_end as u32
+            // Append new XMP entry after IFD
+            (ifd_start + ifd_size as u64) as u32
         };
-
-        // Write XMP data if needed
-        if !xmp_found || xmp_bytes.len() > 4 {
-            writer.seek(SeekFrom::Start(xmp_data_offset as u64))?;
-            writer.write_all(xmp_bytes)?;
-        }
 
         // Update or add XMP entry
         if xmp_found {
@@ -350,8 +355,7 @@ impl TiffHandler {
             entries.push(new_entry);
         }
 
-        // Write updated IFD
-        let ifd_start = writer.stream_position()?;
+        // Write updated IFD at the saved position first
         writer.seek(SeekFrom::Start(ifd_start))?;
 
         // Write entry count
@@ -365,6 +369,12 @@ impl TiffHandler {
 
         // Write next IFD offset
         writer.write_all(&Self::write_u32(next_ifd_offset, byte_order))?;
+
+        // Write XMP data if needed (after IFD is written)
+        if !xmp_found || xmp_bytes.len() > 4 {
+            writer.seek(SeekFrom::Start(xmp_data_offset as u64))?;
+            writer.write_all(xmp_bytes)?;
+        }
 
         Ok(())
     }
