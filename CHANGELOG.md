@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/cavivie/xmpkit/compare/v0.1.1...v0.1.2) - 2025-11-27
+
+### Fixed
+
+- *(tiff)* correct XMP data offset calculation and write order
+- *(mp3)* update tag size when writing XMP to existing ID3v2 tag
+- remove extra byte from GIF magic trailer
+- mainly fix incorrect title logo url address
+
+### Other
+
+- *(deps)* bump vue from 3.5.24 to 3.5.25 in /web
+- *(deps)* bump vue-i18n from 11.1.12 to 11.2.1 in /web
+- *(deps)* bump vitest from 4.0.10 to 4.0.13 in /web
+- *(deps)* bump vite from 7.2.2 to 7.2.4 in /web
+- *(deps)* bump @vitest/eslint-plugin from 1.4.3 to 1.5.0 in /web
+- add comprehensive tests for all file formats
+- add tests to GIF module
+- *(ci)* (deps): bump actions/checkout from 5 to 6
+- update document ref and license copyright
+- make quick start document more useful
+- adapt wasm web ui for mobile devices
+
 ## [0.1.1](https://github.com/cavivie/xmpkit/compare/v0.1.0...v0.1.1) - 2025-11-19
 
 ### Fixed
