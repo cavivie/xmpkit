@@ -13,10 +13,17 @@ use wasm_bindgen::prelude::*;
 /// # Example
 ///
 /// ```javascript
+/// // For read-only operations (memory efficient)
+/// const file = new XmpFile();
+/// file.from_bytes(data);
+/// const meta = file.get_xmp();
+///
+/// // For read and write operations
 /// const options = new ReadOptions();
-/// options.use_packet_scanning();
-/// options.limited_scanning();
+/// options.for_update();  // Required if you want to write changes
 /// file.from_bytes_with(data, options);
+/// // ... modify metadata ...
+/// const modifiedData = file.write_to_bytes();
 /// ```
 #[derive(Default)]
 #[wasm_bindgen]
@@ -30,6 +37,16 @@ impl ReadOptions {
     #[wasm_bindgen(constructor)]
     pub fn new() -> ReadOptions {
         ReadOptions::default()
+    }
+
+    /// Open for reading and writing
+    ///
+    /// This option is **required** if you want to use `write_to_bytes()` later.
+    /// When enabled, the original file data is stored in memory for later writing.
+    ///
+    /// If you only need to read XMP metadata, you can skip this option to save memory.
+    pub fn for_update(&mut self) {
+        self.inner = self.inner.for_update();
     }
 
     /// Force packet scanning (do not use smart handler)
@@ -68,14 +85,22 @@ impl ReadOptions {
 /// import init, { XmpFile, ReadOptions } from './pkg/xmpkit.js';
 /// await init();
 ///
+/// // Read-only mode (memory efficient)
 /// const file = new XmpFile();
 /// file.from_bytes(fileData);
 /// const meta = file.get_xmp();
-/// if (meta) {
-///     meta.set_property("http://ns.adobe.com/xap/1.0/", "CreatorTool", "MyApp");
-///     file.put_xmp(meta);
+///
+/// // Read and write mode
+/// const file2 = new XmpFile();
+/// const options = new ReadOptions();
+/// options.for_update();  // Required for write_to_bytes()
+/// file2.from_bytes_with(fileData, options);
+/// const meta2 = file2.get_xmp();
+/// if (meta2) {
+///     meta2.set_property("http://ns.adobe.com/xap/1.0/", "CreatorTool", "MyApp");
+///     file2.put_xmp(meta2);
 /// }
-/// const modifiedData = file.write_to_bytes();
+/// const modifiedData = file2.write_to_bytes();
 /// ```
 #[derive(Default)]
 #[wasm_bindgen]

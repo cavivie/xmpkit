@@ -58,7 +58,18 @@ pub use xmpkit::wasm::*;
 wasm-pack build --target web --out-dir pkg
 ```
 
-That's it! The bindings (`read_xmp`, `write_xmp`, `parse_xmp_packet`) are now available.
+That's it! The following classes and functions are now available:
+
+**Classes:**
+- `XmpFile` - Read/write XMP from file data
+- `XmpMeta` - Parse and manipulate XMP metadata
+- `ReadOptions` - Configure file reading options
+
+**Functions:**
+- `register_namespace(uri, prefix)` - Register custom namespace
+- `namespace_uri(namespace)` / `namespace_prefix(namespace)` - Get built-in namespace URI/prefix
+- `is_namespace_registered(uri)` - Check if namespace is registered
+- `get_all_registered_namespaces()` - Get all registered namespaces
 
 ### Method 2: Create Custom Bindings
 
@@ -93,11 +104,12 @@ serde_json = "1.0"
 
 ```rust
 use wasm_bindgen::prelude::*;
-use xmpkit::{XmpFile, XmpMeta, XmpValue};
+use xmpkit::{XmpFile, XmpMeta, XmpValue, ReadOptions};
 use xmpkit::core::namespace::ns;
 
 #[wasm_bindgen]
 pub fn read_xmp(data: &[u8]) -> Result<String, JsValue> {
+    // Read-only mode: efficient, doesn't store file data in memory
     let mut file = XmpFile::new();
     file.from_bytes(data)
         .map_err(|e| JsValue::from_str(&format!("Failed to read file: {}", e)))?;
@@ -116,8 +128,9 @@ pub fn read_xmp(data: &[u8]) -> Result<String, JsValue> {
 
 #[wasm_bindgen]
 pub fn write_xmp(data: &[u8], creator_tool: &str) -> Result<Vec<u8>, JsValue> {
+    // Read-write mode: use for_update() to enable writing
     let mut file = XmpFile::new();
-    file.from_bytes(data)
+    file.from_bytes_with(data, ReadOptions::default().for_update())
         .map_err(|e| JsValue::from_str(&format!("Failed to read file: {}", e)))?;
     
     let mut meta = file.get_xmp().cloned().unwrap_or_else(XmpMeta::new);
@@ -164,54 +177,75 @@ wasm-pack build --target nodejs --out-dir pkg
     <pre id="output"></pre>
 
     <script type="module">
-        import init, { read_xmp, write_xmp } from './pkg/xmpkit_wasm.js';
+        import init, { XmpFile, XmpMeta, ReadOptions } from './pkg/my_wasm_app.js';
 
-        let wasmModule;
+        let wasmReady = false;
         
         async function initWasm() {
-            wasmModule = await init();
+            await init();
+            wasmReady = true;
         }
         
         initWasm();
 
         window.readXMP = async function() {
+            if (!wasmReady) return alert('Wasm not ready');
+            
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
-            if (!file) {
-                alert('Please select a file');
-                return;
-            }
+            if (!file) return alert('Please select a file');
 
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
             
             try {
-                const result = read_xmp(uint8Array);
-                document.getElementById('output').textContent = result;
+                // Read-only mode (memory efficient)
+                const xmpFile = new XmpFile();
+                xmpFile.from_bytes(uint8Array);
+                
+                const meta = xmpFile.get_xmp();
+                if (meta) {
+                    const creatorTool = meta.get_property("http://ns.adobe.com/xap/1.0/", "CreatorTool");
+                    document.getElementById('output').textContent = 
+                        `CreatorTool: ${creatorTool || 'Not found'}\n` +
+                        `XMP Packet:\n${meta.serialize_packet()}`;
+                } else {
+                    document.getElementById('output').textContent = 'No XMP metadata found';
+                }
             } catch (error) {
                 document.getElementById('output').textContent = 'Error: ' + error;
             }
         };
 
         window.writeXMP = async function() {
+            if (!wasmReady) return alert('Wasm not ready');
+            
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
-            if (!file) {
-                alert('Please select a file');
-                return;
-            }
+            if (!file) return alert('Please select a file');
 
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
             
-            // Set properties
-            const properties = JSON.stringify({
-                creatorTool: "MyApp",
-                title: "My Image"
-            });
-            
             try {
-                const modifiedData = write_xmp(uint8Array, properties);
+                // Read-write mode: use for_update() for writing
+                const xmpFile = new XmpFile();
+                const options = new ReadOptions();
+                options.for_update();  // Required for write_to_bytes()
+                xmpFile.from_bytes_with(uint8Array, options);
+                
+                // Get or create metadata
+                let meta = xmpFile.get_xmp();
+                if (!meta) {
+                    meta = new XmpMeta();
+                }
+                
+                // Set properties
+                meta.set_property("http://ns.adobe.com/xap/1.0/", "CreatorTool", "MyApp");
+                xmpFile.put_xmp(meta);
+                
+                // Write to bytes
+                const modifiedData = xmpFile.write_to_bytes();
                 
                 // Download modified file
                 const blob = new Blob([modifiedData], { type: file.type });
@@ -233,32 +267,45 @@ wasm-pack build --target nodejs --out-dir pkg
 ### Node.js Usage
 
 ```javascript
-const wasm = require('./pkg/xmpkit_wasm.js');
+const wasm = require('./pkg/my_wasm_app.js');
 const fs = require('fs');
 
 async function main() {
     await wasm.default(); // Initialize Wasm module
     
+    const { XmpFile, XmpMeta, ReadOptions } = wasm;
+    
     // Read file
     const fileData = fs.readFileSync('image.jpg');
     const uint8Array = new Uint8Array(fileData);
     
-    // Read XMP
+    // Read XMP (read-only mode)
     try {
-        const xmpJson = wasm.read_xmp(uint8Array);
-        console.log('XMP Data:', JSON.parse(xmpJson));
+        const xmpFile = new XmpFile();
+        xmpFile.from_bytes(uint8Array);
+        
+        const meta = xmpFile.get_xmp();
+        if (meta) {
+            console.log('CreatorTool:', meta.get_property("http://ns.adobe.com/xap/1.0/", "CreatorTool"));
+        }
     } catch (error) {
         console.error('Error reading XMP:', error);
     }
     
-    // Write XMP
-    const properties = JSON.stringify({
-        creatorTool: "MyApp",
-        title: "My Image"
-    });
-    
+    // Write XMP (read-write mode)
     try {
-        const modifiedData = wasm.write_xmp(uint8Array, properties);
+        const xmpFile = new XmpFile();
+        const options = new ReadOptions();
+        options.for_update();  // Required for write_to_bytes()
+        xmpFile.from_bytes_with(uint8Array, options);
+        
+        let meta = xmpFile.get_xmp();
+        if (!meta) meta = new XmpMeta();
+        
+        meta.set_property("http://ns.adobe.com/xap/1.0/", "CreatorTool", "MyApp");
+        xmpFile.put_xmp(meta);
+        
+        const modifiedData = xmpFile.write_to_bytes();
         fs.writeFileSync('output.jpg', Buffer.from(modifiedData));
         console.log('File written successfully');
     } catch (error) {
@@ -272,91 +319,142 @@ main();
 ### TypeScript Usage
 
 ```typescript
-import init, { read_xmp, write_xmp } from './pkg/xmpkit_wasm';
+import init, { XmpFile, XmpMeta, ReadOptions } from './pkg/my_wasm_app';
 
-interface XMPProperties {
-    creatorTool?: string;
-    createDate?: string;
-    title?: string;
-    description?: string;
-}
-
-async function processImage(file: File): Promise<Uint8Array> {
-    // Initialize Wasm module
+async function readXmp(file: File): Promise<string | null> {
     await init();
     
-    // Read file
     const arrayBuffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
     
-    // Read existing XMP
-    const xmpJson = read_xmp(uint8Array);
-    const properties: XMPProperties = JSON.parse(xmpJson);
-    console.log('Current XMP:', properties);
+    const xmpFile = new XmpFile();
+    xmpFile.from_bytes(uint8Array);
     
-    // Modify properties
-    const newProperties: XMPProperties = {
-        ...properties,
-        creatorTool: "MyApp",
-        title: "Updated Title"
-    };
+    const meta = xmpFile.get_xmp();
+    return meta?.get_property("http://ns.adobe.com/xap/1.0/", "CreatorTool") ?? null;
+}
+
+async function writeXmp(file: File, creatorTool: string): Promise<Uint8Array> {
+    await init();
     
-    // Write XMP
-    const modifiedData = write_xmp(uint8Array, JSON.stringify(newProperties));
-    return modifiedData;
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    
+    // Use for_update() for write operations
+    const xmpFile = new XmpFile();
+    const options = new ReadOptions();
+    options.for_update();
+    xmpFile.from_bytes_with(uint8Array, options);
+    
+    let meta = xmpFile.get_xmp();
+    if (!meta) meta = new XmpMeta();
+    
+    meta.set_property("http://ns.adobe.com/xap/1.0/", "CreatorTool", creatorTool);
+    xmpFile.put_xmp(meta);
+    
+    return xmpFile.write_to_bytes();
 }
 ```
 
 ## API Reference
 
-### `read_xmp(data: Uint8Array): string`
+### Class: `XmpFile`
 
-Reads XMP metadata from file data and returns a JSON string with properties.
+Main class for reading/writing XMP from file data.
 
-**Parameters:**
-- `data`: File data as `Uint8Array`
+#### `new XmpFile()`
 
-**Returns:**
-- JSON string with XMP properties
+Creates a new XmpFile instance.
 
-**Example:**
-```javascript
-const fileData = new Uint8Array(/* file bytes */);
-const xmpJson = read_xmp(fileData);
-const properties = JSON.parse(xmpJson);
-console.log(properties.creatorTool);
-```
+#### `from_bytes(data: Uint8Array): void`
 
-### `write_xmp(data: Uint8Array, properties: string): Uint8Array`
+Load file data in **read-only mode** (memory efficient, cannot write).
 
-Writes XMP metadata to file data and returns modified file data.
+#### `from_bytes_with(data: Uint8Array, options: ReadOptions): void`
 
-**Parameters:**
-- `data`: Original file data as `Uint8Array`
-- `properties`: JSON string with properties to set
+Load file data with options. Use `options.for_update()` to enable writing.
 
-**Returns:**
-- Modified file data as `Uint8Array`
+#### `get_xmp(): XmpMeta | null`
 
-**Example:**
-```javascript
-const fileData = new Uint8Array(/* file bytes */);
-const properties = JSON.stringify({
-    creatorTool: "MyApp",
-    title: "My Image"
-});
-const modifiedData = write_xmp(fileData, properties);
-```
+Get XMP metadata from file.
 
-### `parse_xmp_packet(xmp_packet: string): string`
+#### `put_xmp(meta: XmpMeta): void`
 
-Parses an XMP packet XML string and returns extracted properties as JSON.
+Set XMP metadata to file.
 
-**Parameters:**
-- `xmp_packet`: XMP packet XML string
+#### `write_to_bytes(): Uint8Array`
 
-**Returns:**
-- JSON string with extracted properties
+Write file with XMP to bytes. **Requires `for_update()` option when loading.**
+
+### Class: `XmpMeta`
+
+Class for parsing and manipulating XMP metadata.
+
+#### `new XmpMeta()`
+
+Creates a new empty XmpMeta instance.
+
+#### `XmpMeta.parse(xmpPacket: string): XmpMeta`
+
+Parse XMP packet XML string.
+
+#### `get_property(namespace: string, property: string): string | null`
+
+Get a property value.
+
+#### `set_property(namespace: string, property: string, value: string): void`
+
+Set a property value.
+
+#### `delete_property(namespace: string, property: string): void`
+
+Delete a property.
+
+#### `has_property(namespace: string, property: string): boolean`
+
+Check if a property exists.
+
+#### `serialize(): string`
+
+Serialize to RDF/XML string.
+
+#### `serialize_packet(): string`
+
+Serialize to XMP packet string (with `<?xpacket>` wrapper).
+
+### Class: `ReadOptions`
+
+Options for reading files.
+
+#### `new ReadOptions()`
+
+Creates default options.
+
+#### `for_update(): void`
+
+Enable read-write mode. **Required for `write_to_bytes()`.**
+
+#### `use_packet_scanning(): void`
+
+Force packet scanning mode.
+
+#### `use_smart_handler(): void`
+
+Require smart handler.
+
+### Functions
+
+#### `register_namespace(uri: string, prefix: string): void`
+
+Register a custom namespace.
+
+#### `is_namespace_registered(uri: string): boolean`
+
+Check if namespace is registered.
+
+#### `get_all_registered_namespaces(): object`
+
+Get all registered namespaces as `{ uri: prefix }` object.
 
 ## Building and Deployment
 
