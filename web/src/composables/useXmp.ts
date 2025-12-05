@@ -142,6 +142,7 @@ export function useXmp() {
           let loadSuccess = false
           try {
             const options1 = new ReadOptions()
+            options1.for_update() // Required for write_to_bytes() later
             options1.use_smart_handler()
             options1.only_xmp()
             xmpFileInstance.from_bytes_with(fileData, options1)
@@ -150,6 +151,7 @@ export function useXmp() {
             console.log('Smart handler failed, trying packet scanning...', error)
             try {
               const options2 = new ReadOptions()
+              options2.for_update() // Required for write_to_bytes() later
               options2.use_packet_scanning()
               xmpFileInstance.from_bytes_with(fileData, options2)
               loadSuccess = true
@@ -348,6 +350,7 @@ export function useXmp() {
 
       try {
         const options1 = new ReadOptions()
+        options1.for_update() // Required for write_to_bytes() later
         options1.use_smart_handler()
         options1.only_xmp()
         xmpFileInstance.from_bytes_with(originalFileData.value, options1)
@@ -355,6 +358,7 @@ export function useXmp() {
       } catch {
         try {
           const options2 = new ReadOptions()
+          options2.for_update() // Required for write_to_bytes() later
           options2.use_packet_scanning()
           xmpFileInstance.from_bytes_with(originalFileData.value, options2)
           loadSuccess = true
