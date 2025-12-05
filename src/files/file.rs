@@ -423,17 +423,18 @@ impl XmpFile {
             self.is_open = false;
         }
         self.options = options;
+        self.file_data = None;
 
-        // Read file data for potential packet scanning or handler operations
-        // Store file_data for writing (needed on all platforms including Wasm)
-        let mut file_data = Vec::new();
-        reader.read_to_end(&mut file_data)?;
-        self.file_data = Some(file_data.clone());
-
-        // If packet scanning is requested, search for XMP packet in file content
+        // If packet scanning is requested, we need to read the entire file
         // Note: limited_scanning check is done in open_with (for file paths) before calling this
         if options.use_packet_scanning {
+            let mut file_data = Vec::new();
+            reader.read_to_end(&mut file_data)?;
             self.meta = Self::scan_for_xmp_packet(&file_data)?;
+            // Store file_data only if we need it for writing
+            if options.for_update {
+                self.file_data = Some(file_data);
+            }
             #[cfg(not(target_arch = "wasm32"))]
             {
                 self.is_open = true;
@@ -441,29 +442,30 @@ impl XmpFile {
             return Ok(());
         }
 
-        // Detect handler
+        // Detect handler - this only peeks at file header, no need to read entire file
         let registry = default_registry();
-        let mut reader_cursor = Cursor::new(&file_data);
-
-        // Handle force_given_handler: skip format detection, use handler directly
-        // Note: This requires a handler to be specified, which we don't currently support
-        // in from_reader_with_options. For now, we'll just proceed with normal detection.
-        let handler = if options.force_given_handler {
-            // Force given handler: try all handlers without format check
-            // This is a simplified version - in full implementation, handler would be specified
-            registry.find_by_detection(&mut reader_cursor)?
-        } else {
-            registry.find_by_detection(&mut reader_cursor)?
-        };
+        let handler = registry.find_by_detection(&mut reader)?;
 
         // Handle use_smart_handler: if set and no handler found, return error
         if options.use_smart_handler {
             let handler = handler.ok_or_else(|| {
                 XmpError::NotSupported("No smart file handler available to handle file".to_string())
             })?;
-            // Read XMP (only_xmp flag is passed implicitly - handlers already only read XMP)
-            reader_cursor.set_position(0);
-            self.meta = handler.read_xmp(&mut reader_cursor)?;
+
+            // For update mode, we need the file data for writing later
+            if options.for_update {
+                reader.rewind()?;
+                let mut file_data = Vec::new();
+                reader.read_to_end(&mut file_data)?;
+                self.file_data = Some(file_data.clone());
+                let mut reader_cursor = Cursor::new(&file_data);
+                self.meta = handler.read_xmp(&mut reader_cursor)?;
+            } else {
+                // Read-only mode: read XMP directly from stream without loading entire file
+                reader.rewind()?;
+                self.meta = handler.read_xmp(&mut reader)?;
+            }
+
             #[cfg(not(target_arch = "wasm32"))]
             {
                 self.handler = Some(handler.clone());
@@ -477,9 +479,21 @@ impl XmpFile {
             let handler = handler.ok_or_else(|| {
                 XmpError::NotSupported("No handler available for file format".to_string())
             })?;
-            // Read XMP (only_xmp flag is passed implicitly)
-            reader_cursor.set_position(0);
-            self.meta = handler.read_xmp(&mut reader_cursor)?;
+
+            // For update mode, we need the file data for writing later
+            if options.for_update {
+                reader.rewind()?;
+                let mut file_data = Vec::new();
+                reader.read_to_end(&mut file_data)?;
+                self.file_data = Some(file_data.clone());
+                let mut reader_cursor = Cursor::new(&file_data);
+                self.meta = handler.read_xmp(&mut reader_cursor)?;
+            } else {
+                // Read-only mode: read XMP directly from stream without loading entire file
+                reader.rewind()?;
+                self.meta = handler.read_xmp(&mut reader)?;
+            }
+
             #[cfg(not(target_arch = "wasm32"))]
             {
                 self.handler = Some(handler.clone());
@@ -490,12 +504,23 @@ impl XmpFile {
 
         // Normal case: try to find handler, fall back to packet scanning if not found
         if let Some(handler) = handler {
-            // Read XMP
-            // Note: only_xmp flag is currently not used in our handlers as they already
-            // only read XMP metadata. This flag is kept for API compatibility and future
-            // optimizations where handlers might skip reading other metadata (Exif, IPTC, etc.)
-            reader_cursor.set_position(0);
-            self.meta = handler.read_xmp(&mut reader_cursor)?;
+            // For update mode, we need the file data for writing later
+            if options.for_update {
+                reader.rewind()?;
+                let mut file_data = Vec::new();
+                reader.read_to_end(&mut file_data)?;
+                self.file_data = Some(file_data.clone());
+                let mut reader_cursor = Cursor::new(&file_data);
+                self.meta = handler.read_xmp(&mut reader_cursor)?;
+            } else {
+                // Read-only mode: read XMP directly from stream without loading entire file
+                // Note: only_xmp flag is currently not used in our handlers as they already
+                // only read XMP metadata. This flag is kept for API compatibility and future
+                // optimizations where handlers might skip reading other metadata (Exif, IPTC, etc.)
+                reader.rewind()?;
+                self.meta = handler.read_xmp(&mut reader)?;
+            }
+
             #[cfg(not(target_arch = "wasm32"))]
             {
                 self.handler = Some(handler.clone());
@@ -503,8 +528,15 @@ impl XmpFile {
             }
             Ok(())
         } else {
-            // No handler found, try packet scanning as fallback
+            // No handler found, need to read entire file for packet scanning fallback
+            reader.rewind()?;
+            let mut file_data = Vec::new();
+            reader.read_to_end(&mut file_data)?;
             self.meta = Self::scan_for_xmp_packet(&file_data)?;
+            // Store file_data only if we need it for writing
+            if options.for_update {
+                self.file_data = Some(file_data);
+            }
             #[cfg(not(target_arch = "wasm32"))]
             {
                 self.is_open = true;
@@ -660,7 +692,10 @@ impl XmpFile {
                             let mut reader =
                                 Cursor::new(self.file_data.as_ref().ok_or_else(|| {
                                     XmpError::BadValue(
-                                        "File data not available for handler detection".to_string(),
+                                        "File data not available for handler detection. \
+                                        This can happen if the file was opened in read-only mode. \
+                                        Use ReadOptions::for_update() to enable writing."
+                                            .to_string(),
                                     )
                                 })?);
                             registry
@@ -679,7 +714,10 @@ impl XmpFile {
                             .as_ref()
                             .ok_or_else(|| {
                                 XmpError::BadValue(
-                                    "File data not available for writing".to_string(),
+                                    "File data not available for writing. \
+                                    This can happen if the file was opened in read-only mode. \
+                                    Use ReadOptions::for_update() to enable writing."
+                                        .to_string(),
                                 )
                             })?
                             .clone();
@@ -760,15 +798,29 @@ impl XmpFile {
     /// This is the most flexible method, accepting any type that implements
     /// `Write + Seek`.
     ///
+    /// # Note
+    ///
+    /// This method requires the original file data to be available. The file data
+    /// is only stored when:
+    /// - The file was opened with [`ReadOptions::for_update`]
+    /// - The file was opened with packet scanning mode
+    /// - No handler was found and packet scanning fallback was used
+    ///
+    /// For read-only operations where a handler was found, the file data is not
+    /// stored to save memory. In this case, use [`XmpFile::open_with`] with
+    /// [`ReadOptions::for_update`] if you need to write changes.
+    ///
     /// # Example
     ///
     /// ```rust,no_run
     /// use std::io::Cursor;
-    /// use xmpkit::XmpFile;
+    /// use xmpkit::{XmpFile, ReadOptions};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut file = XmpFile::new();
-    /// // ... load metadata ...
+    /// // Open with for_update to enable writing
+    /// file.open_with("image.jpg", ReadOptions::default().for_update())?;
+    /// // ... modify metadata ...
     /// let mut output = Vec::new();
     /// let cursor = Cursor::new(&mut output);
     /// file.write_to_writer(cursor)?;
@@ -783,7 +835,11 @@ impl XmpFile {
 
         // Get original file data
         let file_data = self.file_data.as_ref().ok_or_else(|| {
-            XmpError::BadValue("Original file data not available for writing".to_string())
+            XmpError::BadValue(
+                "Original file data not available for writing. \
+                To write XMP metadata, open the file with ReadOptions::for_update()."
+                    .to_string(),
+            )
         })?;
 
         // Detect handler from file data
