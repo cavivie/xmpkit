@@ -17,8 +17,8 @@ pub enum Handler {
     Jpeg(crate::files::formats::jpeg::JpegHandler),
     #[cfg(feature = "mp3")]
     Mp3(crate::files::formats::mp3::Mp3Handler),
-    #[cfg(feature = "mpeg4")]
-    Mpeg4(crate::files::formats::mpeg4::Mpeg4Handler),
+    #[cfg(feature = "mp4")]
+    Mp4(crate::files::formats::mp4::Mp4Handler),
     #[cfg(feature = "pdf")]
     Pdf(crate::files::formats::pdf::PdfHandler),
     #[cfg(feature = "png")]
@@ -36,8 +36,8 @@ impl FileHandler for Handler {
             Handler::Jpeg(h) => h.can_handle(reader),
             #[cfg(feature = "mp3")]
             Handler::Mp3(h) => h.can_handle(reader),
-            #[cfg(feature = "mpeg4")]
-            Handler::Mpeg4(h) => h.can_handle(reader),
+            #[cfg(feature = "mp4")]
+            Handler::Mp4(h) => h.can_handle(reader),
             #[cfg(feature = "pdf")]
             Handler::Pdf(h) => h.can_handle(reader),
             #[cfg(feature = "png")]
@@ -58,8 +58,8 @@ impl FileHandler for Handler {
             Handler::Jpeg(h) => h.read_xmp(reader),
             #[cfg(feature = "mp3")]
             Handler::Mp3(h) => h.read_xmp(reader),
-            #[cfg(feature = "mpeg4")]
-            Handler::Mpeg4(h) => h.read_xmp(reader),
+            #[cfg(feature = "mp4")]
+            Handler::Mp4(h) => h.read_xmp(reader),
             #[cfg(feature = "pdf")]
             Handler::Pdf(h) => h.read_xmp(reader),
             #[cfg(feature = "png")]
@@ -82,8 +82,8 @@ impl FileHandler for Handler {
             Handler::Jpeg(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "mp3")]
             Handler::Mp3(h) => h.write_xmp(reader, writer, meta),
-            #[cfg(feature = "mpeg4")]
-            Handler::Mpeg4(h) => h.write_xmp(reader, writer, meta),
+            #[cfg(feature = "mp4")]
+            Handler::Mp4(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "pdf")]
             Handler::Pdf(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "png")]
@@ -101,8 +101,8 @@ impl FileHandler for Handler {
             Handler::Jpeg(h) => h.format_name(),
             #[cfg(feature = "mp3")]
             Handler::Mp3(h) => h.format_name(),
-            #[cfg(feature = "mpeg4")]
-            Handler::Mpeg4(h) => h.format_name(),
+            #[cfg(feature = "mp4")]
+            Handler::Mp4(h) => h.format_name(),
             #[cfg(feature = "pdf")]
             Handler::Pdf(h) => h.format_name(),
             #[cfg(feature = "png")]
@@ -120,8 +120,8 @@ impl FileHandler for Handler {
             Handler::Jpeg(h) => h.extensions(),
             #[cfg(feature = "mp3")]
             Handler::Mp3(h) => h.extensions(),
-            #[cfg(feature = "mpeg4")]
-            Handler::Mpeg4(h) => h.extensions(),
+            #[cfg(feature = "mp4")]
+            Handler::Mp4(h) => h.extensions(),
             #[cfg(feature = "pdf")]
             Handler::Pdf(h) => h.extensions(),
             #[cfg(feature = "png")]
@@ -160,8 +160,8 @@ impl HandlerRegistry {
         self.register(Handler::Jpeg(crate::files::formats::jpeg::JpegHandler));
         #[cfg(feature = "mp3")]
         self.register(Handler::Mp3(crate::files::formats::mp3::Mp3Handler));
-        #[cfg(feature = "mpeg4")]
-        self.register(Handler::Mpeg4(crate::files::formats::mpeg4::Mpeg4Handler));
+        #[cfg(feature = "mp4")]
+        self.register(Handler::Mp4(crate::files::formats::mp4::Mp4Handler));
         #[cfg(feature = "pdf")]
         self.register(Handler::Pdf(crate::files::formats::pdf::PdfHandler));
         #[cfg(feature = "png")]
@@ -264,7 +264,7 @@ mod tests {
         #[cfg(feature = "mp3")]
         assert!(registry.find_by_extension("mp3").is_some());
 
-        #[cfg(feature = "mpeg4")]
+        #[cfg(feature = "mp4")]
         {
             assert!(registry.find_by_extension("mp4").is_some());
             assert!(registry.find_by_extension("m4a").is_some());
@@ -323,12 +323,12 @@ mod tests {
         assert_eq!(handler.unwrap().format_name(), "MP3");
     }
 
-    #[cfg(feature = "mpeg4")]
+    #[cfg(feature = "mp4")]
     #[test]
-    fn test_find_by_detection_mpeg4() {
+    fn test_find_by_detection_mp4() {
         let registry = HandlerRegistry::new();
-        // MPEG4 ftyp box signature
-        let mpeg4_data = vec![
+        // MP4 ftyp box signature
+        let mp4_data = vec![
             0x00, 0x00, 0x00, 0x18, // box size
             0x66, 0x74, 0x79, 0x70, // 'ftyp'
             0x69, 0x73, 0x6F, 0x6D, // 'isom'
@@ -336,7 +336,7 @@ mod tests {
             0x69, 0x73, 0x6F, 0x6D, // compatible brand
             0x61, 0x76, 0x63, 0x31, // compatible brand
         ];
-        let mut reader = Cursor::new(mpeg4_data);
+        let mut reader = Cursor::new(mp4_data);
         let handler = registry.find_by_detection(&mut reader).unwrap();
         assert!(handler.is_some());
         assert_eq!(handler.unwrap().format_name(), "MP4");

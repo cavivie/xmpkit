@@ -10,8 +10,8 @@ pub mod gif;
 pub mod jpeg;
 #[cfg(feature = "mp3")]
 pub mod mp3;
-#[cfg(feature = "mpeg4")]
-pub mod mpeg4;
+#[cfg(feature = "mp4")]
+pub mod mp4;
 #[cfg(feature = "pdf")]
 pub mod pdf;
 #[cfg(feature = "png")]

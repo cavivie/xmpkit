@@ -16,8 +16,8 @@ pub use formats::gif::GifHandler;
 pub use formats::jpeg::JpegHandler;
 #[cfg(feature = "mp3")]
 pub use formats::mp3::Mp3Handler;
-#[cfg(feature = "mpeg4")]
-pub use formats::mpeg4::Mpeg4Handler;
+#[cfg(feature = "mp4")]
+pub use formats::mp4::Mp4Handler;
 #[cfg(feature = "png")]
 pub use formats::png::PngHandler;
 #[cfg(feature = "tiff")]

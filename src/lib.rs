@@ -197,7 +197,7 @@
 //!
 //! - `core` - Core XMP functionality (enabled by default)
 //! - `files` - File format support infrastructure (enabled by default)
-//! - `jpeg`, `png`, `tiff`, `mp3`, `gif`, `mpeg4` - Individual file format handlers
+//! - `jpeg`, `png`, `tiff`, `mp3`, `gif`, `mp4` - Individual file format handlers
 //! - `full-formats` - Enable all file format handlers (enabled by default)
 //! - `mutli-thread` - Multi-threaded runtime support (enabled by default)
 //! - `wasm` - WebAssembly JavaScript bindings (optional, enables wasm-bindgen integration)
@@ -212,7 +212,7 @@
 //! | TIFF   | .tif, .tiff | Yes | Yes |
 //! | MP3    | .mp3      | Yes | Yes |
 //! | GIF    | .gif      | Yes | Yes |
-//! | MPEG4  | .mp4, .m4a, .m4v | Yes | Yes |
+//! | MP4    | .mp4      | Yes | Yes |
 
 #[cfg(feature = "core")]
 pub mod core;
