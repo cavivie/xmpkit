@@ -11,6 +11,7 @@ categories = ["multimedia::images", "encoding"]
 
 [dependencies]
 quick-xml = { version = "0.38", features = ["serialize"], optional = true }
+lopdf = { version = "0.38", optional = true }
 thiserror = "2.0"
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
@@ -33,6 +34,7 @@ gif = ["files"]
 jpeg = ["files"]
 mp3 = ["files"]
 mp4 = ["files"]
+pdf = ["files", "lopdf"]
 png = ["files"]
 tiff = ["files"]
 
@@ -47,7 +49,7 @@ optimize-file-layout = []
 mutli-thread = []
 
 # Enable all file format handlers support
-full-formats = ["gif", "jpeg", "mp3", "mp4", "png", "tiff"]
+full-formats = ["gif", "jpeg", "mp3", "mp4", "pdf", "png", "tiff"]
 
 # WebAssembly JavaScript bindings (optional)
 wasm = ["wasm-bindgen", "js-sys", "serde", "serde_json"]

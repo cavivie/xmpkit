@@ -8,7 +8,7 @@
 //!
 //! - Pure Rust implementation
 //! - Compatible with Adobe XMP standard
-//! - Support for common file formats (JPEG, PNG, TIFF, MP3, GIF, MP4)
+//! - Support for common file formats (e.g., JPEG, PNG, TIFF, MP3, GIF, MP4)
 //! - Memory safe and high performance
 //! - Cross-platform support (iOS, Android, HarmonyOS, macOS, Windows, Linux, Wasm)
 //!

@@ -12,6 +12,8 @@ pub mod jpeg;
 pub mod mp3;
 #[cfg(feature = "mp4")]
 pub mod mp4;
+#[cfg(feature = "pdf")]
+pub mod pdf;
 #[cfg(feature = "png")]
 pub mod png;
 #[cfg(feature = "tiff")]

@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD033 MD041 MD036 -->
 <div align="center">
 
 # XMPKit
@@ -7,6 +8,7 @@
 </div>
 
 **Pure Rust implementation of Adobe XMP Toolkit**
+<!-- markdownlint-enable MD033 MD041 MD036 -->
 
 [![Crates.io][crates-badge]][crates-url]
 [![MIT licensed][mit-badge]][mit-url]
@@ -32,7 +34,7 @@ XMPKit is a pure Rust implementation of Adobe's XMP (Extensible Metadata Platfor
 
 - Pure Rust implementation (no C++ dependencies)
 - Compatible with Adobe XMP standard
-- Support for common file formats (JPEG, PNG, TIFF, etc.)
+- Support for common file formats (JPEG, PNG, TIFF, GIF, MP3, MP4, PDF)
 - Memory safe and high performance
 - Zero-cost abstractions
 - Cross-platform support (iOS, Android, HarmonyOS, macOS, Windows, Linux, Wasm)
@@ -96,23 +98,25 @@ For WebAssembly/JavaScript integration, see [WEBASSEMBLY.md](docs/WEBASSEMBLY.md
 | TIFF | .tif, .tiff | Yes | Yes | Fully supported |
 | MP3 | .mp3 | Yes | Yes | Fully supported |
 | GIF | .gif | Yes | Yes | Fully supported |
-| MP4 | .mp4 | Yes | Yes | Fully supported |
-| PDF | .pdf | No | No | Planned |
+| MP4 | .mp4, .m4a, .m4v | Yes | Yes | Fully supported |
+| PDF | .pdf | Yes | Yes | Fully supported |
 | WebP | .webp | No | No | Planned |
 
 ### Platform Support
 
+<!-- markdownlint-disable MD056 -->
 | Platform | Architecture | File I/O | Memory I/O | Status |
 |----------|-------------|----------|------------|--------|
-| **Native Platforms** |
+| **Native Platforms** |||||
 | macOS | x86_64, arm64 | Yes | Yes | Fully supported |
 | Linux | x86_64, arm64 | Yes | Yes | Fully supported |
 | Windows | x86_64, arm64 | Yes | Yes | Fully supported |
 | iOS | arm64 | Yes | Yes | Fully supported |
 | Android | arm64, armv7, x86_64 | Yes | Yes | Fully supported |
 | HarmonyOS | arm64, armv7, x86_64 | Yes | Yes | Fully supported (use `ohos` feature for Node-API bindings) |
-| **Web Platforms** |
+| **Web Platforms** |||||
 | WebAssembly | wasm32 | No | Yes | Partial (use `from_bytes()` / `from_reader()`, see [WEBASSEMBLY](docs/WEBASSEMBLY.md)) |
+<!-- markdownlint-enable MD056 -->
 
 ## Contributing
 
@@ -122,8 +126,8 @@ Contributions are welcome! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) fo
 
 This project is licensed under either of
 
-- Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or <https://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or <https://opensource.org/licenses/MIT>)
 
 at your option.
 

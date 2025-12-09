@@ -218,6 +218,25 @@ impl XmpMeta {
         serializer.serialize_packet(&root)
     }
 
+    /// Serialize to XMP Packet format with padding to reach a target length
+    ///
+    /// This is useful for in-place updates where the new packet needs to fit
+    /// within the space of an existing packet.
+    ///
+    /// # Arguments
+    ///
+    /// * `target_length` - The desired total packet length in bytes
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(String)` - The serialized packet with padding
+    /// * `Err(XmpError)` - If the serialized packet exceeds target_length
+    pub fn serialize_packet_with_padding(&self, target_length: usize) -> XmpResult<String> {
+        let serializer = XmpSerializer::new();
+        let root = root_read!(self.root);
+        serializer.serialize_packet_with_padding(&root, target_length)
+    }
+
     /// Get an array item by index
     ///
     /// # Arguments

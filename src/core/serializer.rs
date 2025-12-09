@@ -326,6 +326,54 @@ impl XmpSerializer {
 
         Ok(packet)
     }
+
+    /// Serialize to XMP Packet format with padding to reach a target length
+    ///
+    /// This is useful for in-place updates where the new packet needs to fit
+    /// within the space of an existing packet.
+    ///
+    /// # Arguments
+    ///
+    /// * `root` - The root node to serialize
+    /// * `target_length` - The desired total packet length in bytes
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(String)` - The serialized packet with padding
+    /// * `Err(XmpError)` - If the serialized packet exceeds target_length
+    pub fn serialize_packet_with_padding(
+        &self,
+        root: &StructureNode,
+        target_length: usize,
+    ) -> XmpResult<String> {
+        let rdf_content = self.serialize_rdf(root)?;
+
+        // Calculate the overhead for the packet wrapper
+        // <?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>\n ... \n<?xpacket end="w"?>
+        let header = r#"<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>"#;
+        let trailer = r#"<?xpacket end="w"?>"#;
+
+        // Calculate minimum length without padding
+        let min_length = header.len() + 1 + rdf_content.len() + 1 + trailer.len();
+
+        if min_length > target_length {
+            return Err(XmpError::BadValue(format!(
+                "XMP packet minimum size ({}) exceeds target length ({})",
+                min_length, target_length
+            )));
+        }
+
+        // Calculate padding needed
+        let padding_needed = target_length - min_length;
+
+        // Create padding (use spaces for simple padding, following XMP spec)
+        // The padding goes between the RDF content and the trailer
+        let padding = " ".repeat(padding_needed);
+
+        let packet = format!("{}\n{}\n{}{}", header, rdf_content, padding, trailer);
+
+        Ok(packet)
+    }
 }
 
 impl Default for XmpSerializer {
@@ -361,5 +409,55 @@ mod tests {
         assert!(packet.contains("<?xpacket"));
         assert!(packet.contains("rdf:RDF"));
         assert!(packet.contains("xmp:CreatorTool"));
+    }
+
+    #[test]
+    fn test_serialize_packet_with_padding() {
+        let serializer = XmpSerializer::new();
+        let mut root = StructureNode::new();
+        root.set_field(
+            "http://ns.adobe.com/xap/1.0/:CreatorTool".to_string(),
+            Node::simple("TestApp".to_string()),
+        );
+
+        // First get the minimum packet size
+        let min_packet = serializer.serialize_packet(&root).unwrap();
+        let min_len = min_packet.len();
+
+        // Test with target length equal to minimum (no padding needed)
+        let result = serializer.serialize_packet_with_padding(&root, min_len);
+        assert!(result.is_ok());
+        let packet = result.unwrap();
+        assert_eq!(packet.len(), min_len);
+        assert!(packet.contains("<?xpacket"));
+        assert!(packet.ends_with("<?xpacket end=\"w\"?>"));
+
+        // Test with target length larger than minimum (padding added)
+        let target_len = min_len + 100;
+        let result = serializer.serialize_packet_with_padding(&root, target_len);
+        assert!(result.is_ok());
+        let packet = result.unwrap();
+        assert_eq!(packet.len(), target_len);
+        assert!(packet.contains("<?xpacket"));
+        assert!(packet.ends_with("<?xpacket end=\"w\"?>"));
+    }
+
+    #[test]
+    fn test_serialize_packet_with_padding_too_small() {
+        let serializer = XmpSerializer::new();
+        let mut root = StructureNode::new();
+        root.set_field(
+            "http://ns.adobe.com/xap/1.0/:CreatorTool".to_string(),
+            Node::simple("TestApp".to_string()),
+        );
+
+        // Test with target length too small - should fail
+        let result = serializer.serialize_packet_with_padding(&root, 10);
+        assert!(result.is_err());
+
+        // Verify error message
+        let err = result.unwrap_err();
+        let err_msg = err.to_string();
+        assert!(err_msg.contains("exceeds target length"));
     }
 }

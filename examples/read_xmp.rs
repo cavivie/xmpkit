@@ -1,30 +1,7 @@
-// Copyright 2022 Adobe. All rights reserved.
-// This file is licensed to you under the Apache License,
-// Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0)
-// or the MIT license (http://opensource.org/licenses/MIT),
-// at your option.
-
-// Unless required by applicable law or agreed to in writing,
-// this software is distributed on an "AS IS" BASIS, WITHOUT
-// WARRANTIES OR REPRESENTATIONS OF ANY KIND, either express or
-// implied. See the LICENSE-MIT and LICENSE-APACHE files for the
-// specific language governing permissions and limitations under
-// each license.
-
-// ------------------------------------------------------------
-
-// This application will accept a file path to a resource, open
-// the file as read-only, then read the XMP data from the file.
-// Once the XMP packet is available, it will access several
-// properties and print those values to stdout.
-
-// The application reads properties from three different schemas:
-// the XMP Basic schema, the Dublin Core schema, and the Exif
-// schema.
-
-// Based on the example titled "Creating the MyReadXMP application"
-// from XMP Toolkit SDK Programmer's Guide (pages 68-71 of the
-// February 2022 edition).
+//! Read XMP metadata from a file
+//!
+//! This example demonstrates how to read XMP metadata from various file formats.
+//! It reads properties from the XMP Basic, Dublin Core, and Exif schemas.
 
 use std::env;
 
