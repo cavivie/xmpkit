@@ -108,4 +108,3 @@ The files module (`src/files/`) provides file format support:
 2. Update parser/serializer if needed
 3. Add tests
 4. Update documentation
-

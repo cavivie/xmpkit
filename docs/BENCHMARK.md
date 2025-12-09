@@ -261,4 +261,3 @@ read_jpeg_from_reader   time:   [58.816 µs 58.925 µs 59.052 µs]
 write_jpeg_to_bytes     time:   [1.8393 ms 1.9040 ms 1.9854 ms]
 detect_format           time:   [29.662 ns 29.749 ns 29.854 ns]
 ```
-

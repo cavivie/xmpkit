@@ -13,4 +13,3 @@ This directory contains public documentation for XMPKit.
 ## API Documentation
 
 Full API documentation is available at [docs.rs/xmpkit](https://docs.rs/xmpkit).
-

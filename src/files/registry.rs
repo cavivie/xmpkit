@@ -269,6 +269,7 @@ mod tests {
             assert!(registry.find_by_extension("mp4").is_some());
             assert!(registry.find_by_extension("m4a").is_some());
             assert!(registry.find_by_extension("m4v").is_some());
+            assert!(registry.find_by_extension("mov").is_some());
         }
 
         #[cfg(feature = "pdf")]

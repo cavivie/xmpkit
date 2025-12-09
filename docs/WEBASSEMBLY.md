@@ -529,4 +529,3 @@ const processXmp = wasmModule.instance.exports.process_xmp;
 ## Examples
 
 See `examples/wasm_bindings.rs` for a complete wasm-bindgen implementation example.
-

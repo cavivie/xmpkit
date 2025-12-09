@@ -79,7 +79,7 @@ impl FileHandler for Mpeg4Handler {
     }
 
     fn extensions(&self) -> &'static [&'static str] {
-        &["mp4", "m4a", "m4v"]
+        &["mp4", "m4a", "m4v", "mov"]
     }
 }
 

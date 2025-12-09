@@ -212,7 +212,7 @@
 //! | TIFF   | .tif, .tiff | Yes | Yes |
 //! | MP3    | .mp3      | Yes | Yes |
 //! | GIF    | .gif      | Yes | Yes |
-//! | MPEG4  | .mp4, .m4a, .m4v | Yes | Yes |
+//! | MPEG4  | .mp4, .m4a, .m4v, .mov | Yes | Yes |
 
 #[cfg(feature = "core")]
 pub mod core;

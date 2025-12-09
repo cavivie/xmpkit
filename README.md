@@ -98,7 +98,7 @@ For WebAssembly/JavaScript integration, see [WEBASSEMBLY.md](docs/WEBASSEMBLY.md
 | TIFF | .tif, .tiff | Yes | Yes | Fully supported |
 | MP3 | .mp3 | Yes | Yes | Fully supported |
 | GIF | .gif | Yes | Yes | Fully supported |
-| MPEG4 | .mp4, .m4a, .m4v | Yes | Yes | Fully supported |
+| MPEG4 | .mp4, .m4a, .m4v, .mov | Yes | Yes | Fully supported |
 | PDF | .pdf | Yes | Yes | Fully supported |
 | WebP | .webp | No | No | Planned |
 
