@@ -1,28 +1,92 @@
 version: 2
 updates:
-- package-ecosystem: "github-actions"
-  # Workflow files stored in the
-  # default location of `.github/workflows`
-  directory: "/"
-  schedule:
-    interval: "daily"
-  commit-message:
-    prefix: "chore(ci):"
-    include: scope
+  # GitHub Actions - weekly check is enough
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(ci):"
+      include: scope
 
-- package-ecosystem: "cargo"
-  directory: "/"
-  schedule:
-    interval: daily
-    time: "08:00"
-  open-pull-requests-limit: 10
-  commit-message:
-    prefix: "chore(deps):"
-    include: scope
+  # Cargo dependencies
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    groups:
+      # Group all minor/patch updates together
+      rust-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    # Major updates will still be individual PRs
+    commit-message:
+      prefix: "chore(deps):"
+      include: scope
 
-- package-ecosystem: "npm"
-  directory: "/web"
-  schedule:
-    interval: "weekly"
-  commit-message:
-    prefix: "chore(deps):"
+  # npm dependencies for web demo
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    groups:
+      # Vue ecosystem updates together
+      vue-ecosystem:
+        patterns:
+          - "vue*"
+          - "@vue/*"
+          - "pinia"
+          - "vue-router"
+          - "vue-i18n"
+        update-types:
+          - "minor"
+          - "patch"
+      # Build tools together
+      build-tools:
+        patterns:
+          - "vite*"
+          - "@vitejs/*"
+          - "typescript"
+          - "vue-tsc"
+        update-types:
+          - "minor"
+          - "patch"
+      # Testing tools together
+      testing:
+        patterns:
+          - "@playwright/*"
+          - "vitest"
+          - "@vitest/*"
+          - "jsdom"
+        update-types:
+          - "minor"
+          - "patch"
+      # ESLint ecosystem together
+      linting:
+        patterns:
+          - "eslint*"
+          - "@vue/eslint-*"
+        update-types:
+          - "minor"
+          - "patch"
+      # All other minor/patch updates
+      other-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "chore(deps):"
+      include: scope
