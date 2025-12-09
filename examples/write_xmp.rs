@@ -5,7 +5,7 @@
 
 use std::env;
 
-use xmpkit::{core::namespace::ns, register_namespace, ReadOptions, XmpFile, XmpMeta};
+use xmpkit::{core::namespace::ns, register_namespace, XmpFile, XmpMeta, XmpOptions};
 
 fn write_xmp_to_file() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command-line arguments.
@@ -22,7 +22,7 @@ fn write_xmp_to_file() -> Result<(), Box<dyn std::error::Error>> {
 
     // Open the input file with for_update option (required for writing)
     let mut xmp_file = XmpFile::new();
-    xmp_file.open_with(input_path, ReadOptions::default().for_update())?;
+    xmp_file.open_with(input_path, XmpOptions::default().for_update())?;
 
     // Get existing XMP or create new metadata
     let mut xmp = xmp_file.get_xmp().cloned().unwrap_or_else(XmpMeta::new);

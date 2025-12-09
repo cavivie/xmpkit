@@ -39,7 +39,7 @@ mod value;
 
 pub use datetime::XmpDateTime;
 pub use error::{XmpError, XmpErrorKind};
-pub use file::{ReadOptions, XmpFile};
+pub use file::{XmpFile, XmpOptions};
 pub use meta::XmpMeta;
 pub use namespace::{
     get_all_registered_namespaces, get_builtin_namespace_uris, get_namespace_prefix,

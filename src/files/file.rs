@@ -5,107 +5,9 @@
 
 use crate::core::error::{XmpError, XmpResult};
 use crate::core::metadata::XmpMeta;
-use crate::files::handler::FileHandler;
+use crate::files::handler::{FileHandler, XmpOptions};
 use crate::files::registry::default_registry;
 use std::io::{Cursor, Read, Seek, Write};
-
-/// Options for reading XMP metadata from files or memory.
-///
-/// Use the builder pattern to configure options. These options apply to both
-/// file operations (`open_with`) and memory operations (`from_bytes_with`, `from_reader_with`).
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use xmpkit::{XmpFile, ReadOptions};
-///
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let mut file = XmpFile::new();
-/// file.open_with("image.jpg", ReadOptions::default().for_update())?;
-/// // ... modify metadata ...
-/// file.try_close()?;
-/// # Ok(())
-/// # }
-/// ```
-#[derive(Default, Clone, Copy, Debug)]
-pub struct ReadOptions {
-    /// Open for reading and writing (default: read-only)
-    pub(crate) for_update: bool,
-    /// Only the XMP is wanted (allows optimizations)
-    pub(crate) only_xmp: bool,
-    /// Force use of the given handler (format)
-    pub(crate) force_given_handler: bool,
-    /// Be strict about only attempting to use the designated file handler
-    pub(crate) strict: bool,
-    /// Require the use of a smart handler
-    pub(crate) use_smart_handler: bool,
-    /// Force packet scanning (do not use smart handler)
-    pub(crate) use_packet_scanning: bool,
-    /// Only packet scan files "known" to need scanning
-    pub(crate) limited_scanning: bool,
-}
-
-impl ReadOptions {
-    /// Open for read-only access (default).
-    pub fn for_read(mut self) -> Self {
-        self.for_update = false;
-        self
-    }
-
-    /// Open for reading and writing.
-    ///
-    /// Files opened for update are written to only when closing.
-    pub fn for_update(mut self) -> Self {
-        self.for_update = true;
-        self
-    }
-
-    /// Only the XMP is wanted.
-    ///
-    /// This allows space/time optimizations by skipping other metadata.
-    pub fn only_xmp(mut self) -> Self {
-        self.only_xmp = true;
-        self
-    }
-
-    /// Force use of the given handler (format).
-    ///
-    /// Do not even verify the format.
-    pub fn force_given_handler(mut self) -> Self {
-        self.force_given_handler = true;
-        self
-    }
-
-    /// Be strict about only attempting to use the designated file handler.
-    ///
-    /// Do not fall back to other handlers.
-    pub fn strict(mut self) -> Self {
-        self.strict = true;
-        self
-    }
-
-    /// Require the use of a smart handler.
-    pub fn use_smart_handler(mut self) -> Self {
-        self.use_smart_handler = true;
-        self.use_packet_scanning = false; // Mutually exclusive
-        self
-    }
-
-    /// Force packet scanning.
-    ///
-    /// Do not use a smart handler.
-    pub fn use_packet_scanning(mut self) -> Self {
-        self.use_packet_scanning = true;
-        self.use_smart_handler = false; // Mutually exclusive
-        self
-    }
-
-    /// Only packet scan files "known" to need scanning.
-    pub fn limited_scanning(mut self) -> Self {
-        self.limited_scanning = true;
-        self
-    }
-}
 
 /// High-level API for working with XMP metadata in files
 ///
@@ -119,18 +21,18 @@ impl ReadOptions {
 ///
 /// # File Update Behavior
 ///
-/// When a file is opened with [`ReadOptions::for_update`], changes made via
+/// When a file is opened with [`XmpOptions::for_update`], changes made via
 /// [`XmpFile::put_xmp`] are not written to disk immediately. The file remains open
 /// and changes are only written when [`XmpFile::close`] or [`XmpFile::try_close`] is called.
 ///
 /// # Example
 ///
 /// ```rust,no_run
-/// use xmpkit::{XmpFile, ReadOptions, XmpMeta, XmpValue};
+/// use xmpkit::{XmpFile, XmpOptions, XmpMeta, XmpValue};
 ///
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let mut file = XmpFile::new();
-/// file.open_with("image.jpg", ReadOptions::default().for_update())?;
+/// file.open_with("image.jpg", XmpOptions::default().for_update())?;
 ///
 /// if let Some(mut meta) = file.get_xmp().cloned() {
 ///     meta.set_property(
@@ -159,7 +61,7 @@ pub struct XmpFile {
     handler: Option<crate::files::registry::Handler>,
     /// Open options
     #[allow(dead_code)] // Used in native code paths (open_with, try_close)
-    options: ReadOptions,
+    options: XmpOptions,
     /// Whether the file is open
     is_open: bool,
 }
@@ -175,7 +77,7 @@ impl XmpFile {
             file_path: None,
             file_data: None,
             handler: None,
-            options: ReadOptions::default(),
+            options: XmpOptions::default(),
             is_open: false,
         }
     }
@@ -190,11 +92,11 @@ impl XmpFile {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use xmpkit::{XmpFile, ReadOptions};
+    /// use xmpkit::{XmpFile, XmpOptions};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut file = XmpFile::new();
-    /// file.open_with("image.jpg", ReadOptions::default().for_update())?;
+    /// file.open_with("image.jpg", XmpOptions::default().for_update())?;
     /// # Ok(())
     /// # }
     /// ```
@@ -202,7 +104,7 @@ impl XmpFile {
     pub fn open_with<P: AsRef<std::path::Path>>(
         &mut self,
         path: P,
-        options: ReadOptions,
+        options: XmpOptions,
     ) -> XmpResult<()> {
         use std::fs;
         let path = path.as_ref();
@@ -353,7 +255,7 @@ impl XmpFile {
     /// file.from_bytes(jpeg_data)?;
     /// ```
     pub fn from_bytes(&mut self, data: &[u8]) -> XmpResult<()> {
-        self.from_bytes_with(data, ReadOptions::default())
+        self.from_bytes_with(data, XmpOptions::default())
     }
 
     /// Open a file from bytes with options (all platforms, including Wasm)
@@ -364,13 +266,13 @@ impl XmpFile {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use xmpkit::{XmpFile, ReadOptions};
+    /// use xmpkit::{XmpFile, XmpOptions};
     ///
     /// let data: &[u8] = /* your file data */;
     /// let mut file = XmpFile::new();
-    /// file.from_bytes_with(data, ReadOptions::default().use_packet_scanning())?;
+    /// file.from_bytes_with(data, XmpOptions::default().use_packet_scanning())?;
     /// ```
-    pub fn from_bytes_with(&mut self, data: &[u8], options: ReadOptions) -> XmpResult<()> {
+    pub fn from_bytes_with(&mut self, data: &[u8], options: XmpOptions) -> XmpResult<()> {
         let cursor = Cursor::new(data);
         self.from_reader_with(cursor, options)
     }
@@ -392,7 +294,7 @@ impl XmpFile {
     /// file.from_reader(cursor)?;
     /// ```
     pub fn from_reader<R: Read + Seek>(&mut self, reader: R) -> XmpResult<()> {
-        self.from_reader_with(reader, ReadOptions::default())
+        self.from_reader_with(reader, XmpOptions::default())
     }
 
     /// Open a file from a reader with options (all platforms, including Wasm)
@@ -403,17 +305,17 @@ impl XmpFile {
     ///
     /// ```rust,ignore
     /// use std::io::Cursor;
-    /// use xmpkit::{XmpFile, ReadOptions};
+    /// use xmpkit::{XmpFile, XmpOptions};
     ///
     /// let data: Vec<u8> = /* your file data */;
     /// let cursor = Cursor::new(data);
     /// let mut file = XmpFile::new();
-    /// file.from_reader_with(cursor, ReadOptions::default().strict())?;
+    /// file.from_reader_with(cursor, XmpOptions::default().strict())?;
     /// ```
     pub fn from_reader_with<R: Read + Seek>(
         &mut self,
         mut reader: R,
-        options: ReadOptions,
+        options: XmpOptions,
     ) -> XmpResult<()> {
         // Reset state before opening (in case of retry)
         self.meta = None;
@@ -459,11 +361,11 @@ impl XmpFile {
                 reader.read_to_end(&mut file_data)?;
                 self.file_data = Some(file_data.clone());
                 let mut reader_cursor = Cursor::new(&file_data);
-                self.meta = handler.read_xmp(&mut reader_cursor)?;
+                self.meta = handler.read_xmp(&mut reader_cursor, &options)?;
             } else {
                 // Read-only mode: read XMP directly from stream without loading entire file
                 reader.rewind()?;
-                self.meta = handler.read_xmp(&mut reader)?;
+                self.meta = handler.read_xmp(&mut reader, &options)?;
             }
 
             #[cfg(not(target_arch = "wasm32"))]
@@ -487,11 +389,11 @@ impl XmpFile {
                 reader.read_to_end(&mut file_data)?;
                 self.file_data = Some(file_data.clone());
                 let mut reader_cursor = Cursor::new(&file_data);
-                self.meta = handler.read_xmp(&mut reader_cursor)?;
+                self.meta = handler.read_xmp(&mut reader_cursor, &options)?;
             } else {
                 // Read-only mode: read XMP directly from stream without loading entire file
                 reader.rewind()?;
-                self.meta = handler.read_xmp(&mut reader)?;
+                self.meta = handler.read_xmp(&mut reader, &options)?;
             }
 
             #[cfg(not(target_arch = "wasm32"))]
@@ -511,14 +413,11 @@ impl XmpFile {
                 reader.read_to_end(&mut file_data)?;
                 self.file_data = Some(file_data.clone());
                 let mut reader_cursor = Cursor::new(&file_data);
-                self.meta = handler.read_xmp(&mut reader_cursor)?;
+                self.meta = handler.read_xmp(&mut reader_cursor, &options)?;
             } else {
                 // Read-only mode: read XMP directly from stream without loading entire file
-                // Note: only_xmp flag is currently not used in our handlers as they already
-                // only read XMP metadata. This flag is kept for API compatibility and future
-                // optimizations where handlers might skip reading other metadata (Exif, IPTC, etc.)
                 reader.rewind()?;
-                self.meta = handler.read_xmp(&mut reader)?;
+                self.meta = handler.read_xmp(&mut reader, &options)?;
             }
 
             #[cfg(not(target_arch = "wasm32"))]
@@ -565,7 +464,7 @@ impl XmpFile {
     ///
     /// # Update Behavior
     ///
-    /// - If the file was opened with [`ReadOptions::for_update`], changes are
+    /// - If the file was opened with [`XmpOptions::for_update`], changes are
     ///   not written to disk immediately. Call [`XmpFile::close`] or [`XmpFile::try_close`]
     ///   to write changes to disk.
     /// - If the file was opened read-only, this only updates the in-memory metadata.
@@ -573,11 +472,11 @@ impl XmpFile {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use xmpkit::{XmpFile, ReadOptions, XmpMeta, XmpValue};
+    /// use xmpkit::{XmpFile, XmpOptions, XmpMeta, XmpValue};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut file = XmpFile::new();
-    /// file.open_with("image.jpg", ReadOptions::default().for_update())?;
+    /// file.open_with("image.jpg", XmpOptions::default().for_update())?;
     ///
     /// let mut meta = file.get_xmp().cloned().unwrap_or_else(XmpMeta::new);
     /// meta.set_property(
@@ -603,7 +502,7 @@ impl XmpFile {
     /// opened for update are written to only when closing.
     ///
     /// If the file is opened for read-only access (using
-    /// [`ReadOptions::for_read`]), the disk file is closed
+    /// [`XmpOptions::for_read`]), the disk file is closed
     /// immediately after reading the data from it; the `XmpFile`
     /// struct, however, remains in the open state. You must call
     /// [`XmpFile::close`] when finished using it.
@@ -621,11 +520,11 @@ impl XmpFile {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use xmpkit::{XmpFile, ReadOptions};
+    /// use xmpkit::{XmpFile, XmpOptions};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut file = XmpFile::new();
-    /// file.open_with("image.jpg", ReadOptions::default().for_update())?;
+    /// file.open_with("image.jpg", XmpOptions::default().for_update())?;
     /// // ... modify metadata ...
     /// file.close(); // Ignores errors
     /// # Ok(())
@@ -642,7 +541,7 @@ impl XmpFile {
     /// opened for update are written to only when closing.
     ///
     /// If the file is opened for read-only access (using
-    /// [`ReadOptions::for_read`]), the disk file is closed
+    /// [`XmpOptions::for_read`]), the disk file is closed
     /// immediately after reading the data from it; the `XmpFile`
     /// struct, however, remains in the open state. You must call
     /// [`XmpFile::try_close`] when finished using it.
@@ -659,11 +558,11 @@ impl XmpFile {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use xmpkit::{XmpFile, ReadOptions};
+    /// use xmpkit::{XmpFile, XmpOptions};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut file = XmpFile::new();
-    /// file.open_with("image.jpg", ReadOptions::default().for_update())?;
+    /// file.open_with("image.jpg", XmpOptions::default().for_update())?;
     /// // ... modify metadata ...
     /// file.try_close()?; // Returns error if write fails
     /// # Ok(())
@@ -694,7 +593,7 @@ impl XmpFile {
                                     XmpError::BadValue(
                                         "File data not available for handler detection. \
                                         This can happen if the file was opened in read-only mode. \
-                                        Use ReadOptions::for_update() to enable writing."
+                                        Use XmpOptions::for_update() to enable writing."
                                             .to_string(),
                                     )
                                 })?);
@@ -716,7 +615,7 @@ impl XmpFile {
                                 XmpError::BadValue(
                                     "File data not available for writing. \
                                     This can happen if the file was opened in read-only mode. \
-                                    Use ReadOptions::for_update() to enable writing."
+                                    Use XmpOptions::for_update() to enable writing."
                                         .to_string(),
                                 )
                             })?
@@ -802,24 +701,24 @@ impl XmpFile {
     ///
     /// This method requires the original file data to be available. The file data
     /// is only stored when:
-    /// - The file was opened with [`ReadOptions::for_update`]
+    /// - The file was opened with [`XmpOptions::for_update`]
     /// - The file was opened with packet scanning mode
     /// - No handler was found and packet scanning fallback was used
     ///
     /// For read-only operations where a handler was found, the file data is not
     /// stored to save memory. In this case, use [`XmpFile::open_with`] with
-    /// [`ReadOptions::for_update`] if you need to write changes.
+    /// [`XmpOptions::for_update`] if you need to write changes.
     ///
     /// # Example
     ///
     /// ```rust,no_run
     /// use std::io::Cursor;
-    /// use xmpkit::{XmpFile, ReadOptions};
+    /// use xmpkit::{XmpFile, XmpOptions};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut file = XmpFile::new();
     /// // Open with for_update to enable writing
-    /// file.open_with("image.jpg", ReadOptions::default().for_update())?;
+    /// file.open_with("image.jpg", XmpOptions::default().for_update())?;
     /// // ... modify metadata ...
     /// let mut output = Vec::new();
     /// let cursor = Cursor::new(&mut output);
@@ -837,7 +736,7 @@ impl XmpFile {
         let file_data = self.file_data.as_ref().ok_or_else(|| {
             XmpError::BadValue(
                 "Original file data not available for writing. \
-                To write XMP metadata, open the file with ReadOptions::for_update()."
+                To write XMP metadata, open the file with XmpOptions::for_update()."
                     .to_string(),
             )
         })?;

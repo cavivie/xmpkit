@@ -10,7 +10,7 @@
 
 use crate::core::error::{XmpError, XmpResult};
 use crate::core::metadata::XmpMeta;
-use crate::files::handler::FileHandler;
+use crate::files::handler::{FileHandler, XmpOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 
 /// JPEG segment markers
@@ -47,7 +47,11 @@ impl FileHandler for JpegHandler {
         Ok(header[0] == 0xFF && header[1] == MARKER_SOI)
     }
 
-    fn read_xmp<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<Option<XmpMeta>> {
+    fn read_xmp<R: Read + Seek>(
+        &self,
+        reader: &mut R,
+        _options: &XmpOptions,
+    ) -> XmpResult<Option<XmpMeta>> {
         Self::read_xmp(reader)
     }
 

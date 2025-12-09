@@ -68,7 +68,7 @@ mod wasm_compatible_tests {
 /// Verifies that XMP can be read without loading entire file into memory
 mod streaming_read_tests {
     use super::*;
-    use xmpkit::ReadOptions;
+    use xmpkit::XmpOptions;
 
     #[test]
     fn read_only_mode_does_not_store_file_data() {
@@ -98,7 +98,7 @@ mod streaming_read_tests {
         // Error message should indicate the issue
         let err_msg = result.unwrap_err().to_string();
         assert!(
-            err_msg.contains("ReadOptions::for_update"),
+            err_msg.contains("XmpOptions::for_update"),
             "Error should suggest using for_update()"
         );
     }
@@ -115,7 +115,7 @@ mod streaming_read_tests {
 
         // Open with for_update option
         let mut file = XmpFile::new();
-        file.from_bytes_with(&file_data, ReadOptions::default().for_update())
+        file.from_bytes_with(&file_data, XmpOptions::default().for_update())
             .unwrap();
 
         // Verify we can read XMP
@@ -149,7 +149,7 @@ mod streaming_read_tests {
         let mut file = XmpFile::new();
         file.from_bytes_with(
             &file_data,
-            ReadOptions::default().use_packet_scanning().for_update(),
+            XmpOptions::default().use_packet_scanning().for_update(),
         )
         .unwrap();
 
@@ -176,7 +176,7 @@ mod streaming_read_tests {
 
         // Open with packet scanning only (read-only)
         let mut file = XmpFile::new();
-        file.from_bytes_with(&file_data, ReadOptions::default().use_packet_scanning())
+        file.from_bytes_with(&file_data, XmpOptions::default().use_packet_scanning())
             .unwrap();
 
         // Writing should fail because file_data is not stored

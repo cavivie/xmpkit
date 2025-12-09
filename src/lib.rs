@@ -238,7 +238,7 @@ pub use core::namespace::{
     get_global_namespace_uri, is_namespace_registered, ns, register_namespace,
 };
 #[cfg(feature = "files")]
-pub use files::{ReadOptions, XmpFile};
+pub use files::{XmpFile, XmpOptions};
 pub use types::qualifier::Qualifier;
 pub use types::value::XmpValue;
 pub use utils::datetime::XmpDateTime;

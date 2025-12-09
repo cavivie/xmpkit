@@ -9,7 +9,7 @@ pub mod formats;
 pub mod handler;
 pub mod registry;
 
-pub use file::{ReadOptions, XmpFile};
+pub use file::XmpFile;
 #[cfg(feature = "gif")]
 pub use formats::gif::GifHandler;
 #[cfg(feature = "jpeg")]
@@ -23,4 +23,5 @@ pub use formats::png::PngHandler;
 #[cfg(feature = "tiff")]
 pub use formats::tiff::TiffHandler;
 pub use handler::FileHandler;
+pub use handler::XmpOptions;
 pub use registry::{default_registry, Handler, HandlerRegistry};

@@ -4,7 +4,7 @@
 //! Handlers can be registered and looked up by file extension or format detection.
 
 use crate::core::error::XmpResult;
-use crate::files::handler::FileHandler;
+use crate::files::handler::{FileHandler, XmpOptions};
 use std::io::{Read, Seek, Write};
 
 /// Enum of supported file handlers
@@ -50,22 +50,23 @@ impl FileHandler for Handler {
     fn read_xmp<R: Read + Seek>(
         &self,
         reader: &mut R,
+        options: &XmpOptions,
     ) -> XmpResult<Option<crate::core::metadata::XmpMeta>> {
         match self {
             #[cfg(feature = "gif")]
-            Handler::Gif(h) => h.read_xmp(reader),
+            Handler::Gif(h) => h.read_xmp(reader, options),
             #[cfg(feature = "jpeg")]
-            Handler::Jpeg(h) => h.read_xmp(reader),
+            Handler::Jpeg(h) => h.read_xmp(reader, options),
             #[cfg(feature = "mp3")]
-            Handler::Mp3(h) => h.read_xmp(reader),
+            Handler::Mp3(h) => h.read_xmp(reader, options),
             #[cfg(feature = "mpeg4")]
-            Handler::Mpeg4(h) => h.read_xmp(reader),
+            Handler::Mpeg4(h) => h.read_xmp(reader, options),
             #[cfg(feature = "pdf")]
-            Handler::Pdf(h) => h.read_xmp(reader),
+            Handler::Pdf(h) => h.read_xmp(reader, options),
             #[cfg(feature = "png")]
-            Handler::Png(h) => h.read_xmp(reader),
+            Handler::Png(h) => h.read_xmp(reader, options),
             #[cfg(feature = "tiff")]
-            Handler::Tiff(h) => h.read_xmp(reader),
+            Handler::Tiff(h) => h.read_xmp(reader, options),
         }
     }
 

@@ -1,6 +1,6 @@
 //! WebAssembly bindings for XMP file operations
 
-use crate::files::file::ReadOptions as RustReadOptions;
+use crate::files::handler::XmpOptions as RustXmpOptions;
 use crate::wasm::error::{xmp_error_to_wasm_error, XmpError};
 use crate::wasm::meta::XmpMeta;
 use crate::XmpFile as RustXmpFile;
@@ -19,7 +19,7 @@ use wasm_bindgen::prelude::*;
 /// const meta = file.get_xmp();
 ///
 /// // For read and write operations
-/// const options = new ReadOptions();
+/// const options = new XmpOptions();
 /// options.for_update();  // Required if you want to write changes
 /// file.from_bytes_with(data, options);
 /// // ... modify metadata ...
@@ -27,16 +27,16 @@ use wasm_bindgen::prelude::*;
 /// ```
 #[derive(Default)]
 #[wasm_bindgen]
-pub struct ReadOptions {
-    inner: RustReadOptions,
+pub struct XmpOptions {
+    inner: RustXmpOptions,
 }
 
 #[wasm_bindgen]
-impl ReadOptions {
+impl XmpOptions {
     /// Create default options
     #[wasm_bindgen(constructor)]
-    pub fn new() -> ReadOptions {
-        ReadOptions::default()
+    pub fn new() -> XmpOptions {
+        XmpOptions::default()
     }
 
     /// Open for reading and writing
@@ -82,7 +82,7 @@ impl ReadOptions {
 /// # Example
 ///
 /// ```javascript
-/// import init, { XmpFile, ReadOptions } from './pkg/xmpkit.js';
+/// import init, { XmpFile, XmpOptions } from './pkg/xmpkit.js';
 /// await init();
 ///
 /// // Read-only mode (memory efficient)
@@ -92,7 +92,7 @@ impl ReadOptions {
 ///
 /// // Read and write mode
 /// const file2 = new XmpFile();
-/// const options = new ReadOptions();
+/// const options = new XmpOptions();
 /// options.for_update();  // Required for write_to_bytes()
 /// file2.from_bytes_with(fileData, options);
 /// const meta2 = file2.get_xmp();
@@ -132,11 +132,11 @@ impl XmpFile {
     /// # Example
     ///
     /// ```javascript
-    /// const options = new ReadOptions();
+    /// const options = new XmpOptions();
     /// options.use_packet_scanning();
     /// file.from_bytes_with(data, options);
     /// ```
-    pub fn from_bytes_with(&mut self, data: &[u8], options: &ReadOptions) -> Result<(), XmpError> {
+    pub fn from_bytes_with(&mut self, data: &[u8], options: &XmpOptions) -> Result<(), XmpError> {
         self.inner
             .from_bytes_with(data, options.inner)
             .map_err(xmp_error_to_wasm_error)

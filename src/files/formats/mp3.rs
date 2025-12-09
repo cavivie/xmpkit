@@ -10,7 +10,7 @@
 
 use crate::core::error::{XmpError, XmpResult};
 use crate::core::metadata::XmpMeta;
-use crate::files::handler::FileHandler;
+use crate::files::handler::{FileHandler, XmpOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 
 /// ID3v2 tag header size (same for v2.2, v2.3, v2.4)
@@ -43,7 +43,11 @@ impl FileHandler for Mp3Handler {
         Ok(header == *b"ID3")
     }
 
-    fn read_xmp<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<Option<XmpMeta>> {
+    fn read_xmp<R: Read + Seek>(
+        &self,
+        reader: &mut R,
+        _options: &XmpOptions,
+    ) -> XmpResult<Option<XmpMeta>> {
         Self::read_xmp(reader)
     }
 

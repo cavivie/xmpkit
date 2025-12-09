@@ -10,7 +10,7 @@
 
 use crate::core::error::{XmpError, XmpResult};
 use crate::core::metadata::XmpMeta;
-use crate::files::handler::FileHandler;
+use crate::files::handler::{FileHandler, XmpOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 
 /// TIFF file header signatures
@@ -40,7 +40,11 @@ impl FileHandler for TiffHandler {
         Ok(header[0..4] == *TIFF_SIGNATURE_LE || header[0..4] == *TIFF_SIGNATURE_BE)
     }
 
-    fn read_xmp<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<Option<XmpMeta>> {
+    fn read_xmp<R: Read + Seek>(
+        &self,
+        reader: &mut R,
+        _options: &XmpOptions,
+    ) -> XmpResult<Option<XmpMeta>> {
         Self::read_xmp(reader)
     }
 

@@ -1,6 +1,6 @@
 //! OpenHarmony bindings for XMP file operations
 
-use crate::files::file::ReadOptions as RustReadOptions;
+use crate::files::handler::XmpOptions as RustXmpOptions;
 use crate::ohos::error::xmp_error_to_ohos_error;
 use crate::ohos::meta::XmpMeta;
 use crate::XmpFile as RustXmpFile;
@@ -12,16 +12,16 @@ use napi_ohos::bindgen_prelude::*;
 /// Configure how XMP data is read and processed.
 #[derive(Default)]
 #[napi]
-pub struct ReadOptions {
-    inner: RustReadOptions,
+pub struct XmpOptions {
+    inner: RustXmpOptions,
 }
 
 #[napi]
-impl ReadOptions {
+impl XmpOptions {
     /// Create default options
     #[napi(constructor)]
-    pub fn new() -> ReadOptions {
-        ReadOptions::default()
+    pub fn new() -> XmpOptions {
+        XmpOptions::default()
     }
 
     /// Force packet scanning (do not use smart handler)
@@ -77,7 +77,7 @@ impl XmpFile {
     }
 
     /// Load XMP from file bytes with options
-    pub fn from_bytes_with(&mut self, data: Buffer, options: &ReadOptions) -> Result<()> {
+    pub fn from_bytes_with(&mut self, data: Buffer, options: &XmpOptions) -> Result<()> {
         self.inner
             .from_bytes_with(data.as_ref(), options.inner)
             .map_err(|e| Error::from_reason(format!("{}", xmp_error_to_ohos_error(e))))

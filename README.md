@@ -39,6 +39,14 @@ XMPKit is a pure Rust implementation of Adobe's XMP (Extensible Metadata Platfor
 - Zero-cost abstractions
 - Cross-platform support (iOS, Android, HarmonyOS, macOS, Windows, Linux, Wasm)
 
+### Optional Features
+
+| Feature | Description |
+|---------|-------------|
+| `optimize-file-layout` | Optimize file layout for streaming (MPEG4: UUID box after moov, before mdat) |
+
+**Note:** MPEG4/MOV files automatically reconcile QuickTime native metadata (©nam, ©ART, cprt, etc.) to XMP by default. Use `XmpOptions::only_xmp()` to skip reconciliation.
+
 ## Quick Start
 
 ```rust
@@ -107,14 +115,12 @@ For WebAssembly/JavaScript integration, see [WEBASSEMBLY.md](docs/WEBASSEMBLY.md
 <!-- markdownlint-disable MD056 -->
 | Platform | Architecture | File I/O | Memory I/O | Status |
 |----------|-------------|----------|------------|--------|
-| **Native Platforms** |||||
 | macOS | x86_64, arm64 | Yes | Yes | Fully supported |
 | Linux | x86_64, arm64 | Yes | Yes | Fully supported |
 | Windows | x86_64, arm64 | Yes | Yes | Fully supported |
 | iOS | arm64 | Yes | Yes | Fully supported |
 | Android | arm64, armv7, x86_64 | Yes | Yes | Fully supported |
 | HarmonyOS | arm64, armv7, x86_64 | Yes | Yes | Fully supported (use `ohos` feature for Node-API bindings) |
-| **Web Platforms** |||||
 | WebAssembly | wasm32 | No | Yes | Partial (use `from_bytes()` / `from_reader()`, see [WEBASSEMBLY](docs/WEBASSEMBLY.md)) |
 <!-- markdownlint-enable MD056 -->
 

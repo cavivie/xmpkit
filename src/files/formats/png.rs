@@ -10,7 +10,7 @@
 
 use crate::core::error::{XmpError, XmpResult};
 use crate::core::metadata::XmpMeta;
-use crate::files::handler::FileHandler;
+use crate::files::handler::{FileHandler, XmpOptions};
 use std::io::{Read, Seek, Write};
 
 /// PNG file signature
@@ -37,7 +37,11 @@ impl FileHandler for PngHandler {
         Ok(signature == PNG_SIGNATURE)
     }
 
-    fn read_xmp<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<Option<XmpMeta>> {
+    fn read_xmp<R: Read + Seek>(
+        &self,
+        reader: &mut R,
+        _options: &XmpOptions,
+    ) -> XmpResult<Option<XmpMeta>> {
         Self::read_xmp(reader)
     }
 

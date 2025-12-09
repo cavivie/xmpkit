@@ -10,7 +10,7 @@
 
 use crate::core::error::{XmpError, XmpResult};
 use crate::core::metadata::XmpMeta;
-use crate::files::handler::FileHandler;
+use crate::files::handler::{FileHandler, XmpOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 
 /// MP4 file signature (ftyp box)
@@ -60,8 +60,12 @@ impl FileHandler for Mpeg4Handler {
         }
     }
 
-    fn read_xmp<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<Option<XmpMeta>> {
-        Self::read_xmp(reader)
+    fn read_xmp<R: Read + Seek>(
+        &self,
+        reader: &mut R,
+        options: &XmpOptions,
+    ) -> XmpResult<Option<XmpMeta>> {
+        Self::read_xmp(reader, options)
     }
 
     fn write_xmp<R: Read + Seek, W: Write + Seek>(
@@ -102,20 +106,111 @@ struct BoxLayoutInfo {
 }
 
 impl Mpeg4Handler {
-    /// Read XMP metadata from an MP4 file
+    /// Read XMP metadata from an MP4 file with options
+    ///
+    /// By default (when `only_xmp` is false), this function will:
+    /// 1. Read the XMP metadata from the file
+    /// 2. Read QuickTime native metadata (©nam, ©ART, cprt, etc.)
+    /// 3. Reconcile native metadata into XMP (only for properties not already in XMP)
+    ///
+    /// When `only_xmp` is true, only the XMP is read without reconciliation.
     ///
     /// # Arguments
     ///
     /// * `reader` - A reader implementing `Read + Seek`
+    /// * `options` - Options controlling how XMP is read
     ///
     /// # Returns
     ///
     /// * `Ok(Some(XmpMeta))` if XMP metadata is found
     /// * `Ok(None)` if no XMP metadata is found
     /// * `Err(XmpError)` if an error occurs
-    pub fn read_xmp<R: Read + Seek>(mut reader: R) -> XmpResult<Option<XmpMeta>> {
+    pub fn read_xmp<R: Read + Seek>(
+        mut reader: R,
+        options: &XmpOptions,
+    ) -> XmpResult<Option<XmpMeta>> {
+        // First, read XMP using standard method
+        let xmp_result = Self::read_xmp_internal(&mut reader)?;
+
+        // If only_xmp is set, skip reconciliation with native metadata
+        if options.only_xmp {
+            return Ok(xmp_result);
+        }
+
+        // Reconcile with native metadata
+        let had_xmp = xmp_result.is_some();
+
+        reader.seek(SeekFrom::Start(0))?;
+        let udta_info = Self::find_udta_box(&mut reader)?;
+
+        let mut meta = xmp_result.unwrap_or_else(XmpMeta::new);
+        let mut reconciled = false;
+
+        if let Some((udta_start, udta_size)) = udta_info {
+            reader.seek(SeekFrom::Start(udta_start + 8))?; // Skip udta header
+            let udta_end = udta_start + udta_size;
+            let native_items = native_reconcile::read_native_metadata(&mut reader, udta_end)?;
+            if !native_items.is_empty() {
+                native_reconcile::reconcile_to_xmp(&mut meta, &native_items);
+                reconciled = true;
+            }
+        }
+
+        // Return None only if we had no XMP and no native metadata was reconciled
+        if !had_xmp && !reconciled {
+            Ok(None)
+        } else {
+            Ok(Some(meta))
+        }
+    }
+
+    /// Find udta box location within the file
+    fn find_udta_box<R: Read + Seek>(reader: &mut R) -> XmpResult<Option<(u64, u64)>> {
+        reader.seek(SeekFrom::Start(0))?;
+
+        // Read ftyp box
+        let ftyp_box = Self::read_box(reader)?;
+        if ftyp_box.box_type != *MP4_SIGNATURE {
+            return Ok(None);
+        }
+        reader.seek(SeekFrom::Start(ftyp_box.size))?;
+
+        // Search for moov box
+        loop {
+            let box_start = reader.stream_position()?;
+            let box_info = match Self::read_box(reader) {
+                Ok(b) => b,
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
+                Err(e) => return Err(e.into()),
+            };
+
+            if box_info.box_type == *b"moov" {
+                // Search for udta inside moov
+                let moov_end = box_start + box_info.size;
+                while reader.stream_position()? < moov_end {
+                    let child_start = reader.stream_position()?;
+                    let child_info = match Self::read_box(reader) {
+                        Ok(b) => b,
+                        Err(_) => break,
+                    };
+
+                    if child_info.box_type == *BOX_TYPE_UDTA {
+                        return Ok(Some((child_start, child_info.size)));
+                    }
+                    reader.seek(SeekFrom::Start(child_start + child_info.size))?;
+                }
+                return Ok(None);
+            }
+
+            // Skip to next box
+            reader.seek(SeekFrom::Start(box_start + box_info.size))?;
+        }
+    }
+
+    /// Internal implementation of read_xmp without reconciliation
+    fn read_xmp_internal<R: Read + Seek>(reader: &mut R) -> XmpResult<Option<XmpMeta>> {
         // Read ftyp box (first box in MP4 file)
-        let ftyp_box = Self::read_box(&mut reader)?;
+        let ftyp_box = Self::read_box(reader)?;
         if ftyp_box.box_type != *MP4_SIGNATURE {
             return Err(XmpError::BadValue("Not a valid MP4 file".to_string()));
         }
@@ -128,7 +223,7 @@ impl Mpeg4Handler {
         // Then search for moov/udta/XMP_ box (QuickTime format)
         loop {
             let box_start = reader.stream_position()?;
-            let box_info = match Self::read_box(&mut reader) {
+            let box_info = match Self::read_box(reader) {
                 Ok(b) => b,
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     return Ok(None);
@@ -138,13 +233,13 @@ impl Mpeg4Handler {
 
             // Check for top-level XMP UUID box (ISO Base Media format)
             if box_info.box_type == *BOX_TYPE_UUID {
-                if let Some(xmp) = Self::read_xmp_from_uuid_box(&mut reader, &box_info)? {
+                if let Some(xmp) = Self::read_xmp_from_uuid_box(reader, &box_info)? {
                     return Ok(Some(xmp));
                 }
             } else if box_info.box_type == *b"moov" {
                 // Search inside moov for udta/XMP_ (QuickTime format)
                 let moov_end = box_start + box_info.size;
-                if let Some(xmp) = Self::search_udta_for_xmp(&mut reader, moov_end)? {
+                if let Some(xmp) = Self::search_udta_for_xmp(reader, moov_end)? {
                     return Ok(Some(xmp));
                 }
             } else {
@@ -1337,6 +1432,425 @@ impl Mpeg4Handler {
     }
 }
 
+// ============================================================================
+// MPEG4/QuickTime Native Metadata Reconciliation
+// ============================================================================
+
+mod native_reconcile {
+    use super::*;
+    use crate::core::namespace::ns;
+
+    /// ISO 639-2 (3-letter) to ISO 639-1 (2-letter) language code mapping
+    /// From: http://www.loc.gov/standards/iso639-2/php/code_list.php
+    const LANG_CODES: &[(&str, &str)] = &[
+        ("aar", "aa"),
+        ("abk", "ab"),
+        ("afr", "af"),
+        ("aka", "ak"),
+        ("alb", "sq"),
+        ("sqi", "sq"),
+        ("amh", "am"),
+        ("ara", "ar"),
+        ("arg", "an"),
+        ("arm", "hy"),
+        ("hye", "hy"),
+        ("asm", "as"),
+        ("ava", "av"),
+        ("ave", "ae"),
+        ("aym", "ay"),
+        ("aze", "az"),
+        ("bak", "ba"),
+        ("bam", "bm"),
+        ("baq", "eu"),
+        ("eus", "eu"),
+        ("bel", "be"),
+        ("ben", "bn"),
+        ("bih", "bh"),
+        ("bis", "bi"),
+        ("bod", "bo"),
+        ("tib", "bo"),
+        ("bos", "bs"),
+        ("bre", "br"),
+        ("bul", "bg"),
+        ("bur", "my"),
+        ("mya", "my"),
+        ("cat", "ca"),
+        ("ces", "cs"),
+        ("cze", "cs"),
+        ("cha", "ch"),
+        ("che", "ce"),
+        ("chi", "zh"),
+        ("zho", "zh"),
+        ("chu", "cu"),
+        ("chv", "cv"),
+        ("cor", "kw"),
+        ("cos", "co"),
+        ("cre", "cr"),
+        ("cym", "cy"),
+        ("wel", "cy"),
+        ("dan", "da"),
+        ("deu", "de"),
+        ("ger", "de"),
+        ("div", "dv"),
+        ("dut", "nl"),
+        ("nld", "nl"),
+        ("dzo", "dz"),
+        ("ell", "el"),
+        ("gre", "el"),
+        ("eng", "en"),
+        ("epo", "eo"),
+        ("est", "et"),
+        ("ewe", "ee"),
+        ("fao", "fo"),
+        ("fas", "fa"),
+        ("per", "fa"),
+        ("fij", "fj"),
+        ("fin", "fi"),
+        ("fra", "fr"),
+        ("fre", "fr"),
+        ("fry", "fy"),
+        ("ful", "ff"),
+        ("gla", "gd"),
+        ("gle", "ga"),
+        ("glg", "gl"),
+        ("glv", "gv"),
+        ("grn", "gn"),
+        ("guj", "gu"),
+        ("hat", "ht"),
+        ("hau", "ha"),
+        ("heb", "he"),
+        ("her", "hz"),
+        ("hin", "hi"),
+        ("hmo", "ho"),
+        ("hrv", "hr"),
+        ("hun", "hu"),
+        ("ibo", "ig"),
+        ("ice", "is"),
+        ("isl", "is"),
+        ("ido", "io"),
+        ("iii", "ii"),
+        ("iku", "iu"),
+        ("ile", "ie"),
+        ("ina", "ia"),
+        ("ind", "id"),
+        ("ipk", "ik"),
+        ("ita", "it"),
+        ("jav", "jv"),
+        ("jpn", "ja"),
+        ("kal", "kl"),
+        ("kan", "kn"),
+        ("kas", "ks"),
+        ("kat", "ka"),
+        ("geo", "ka"),
+        ("kau", "kr"),
+        ("kaz", "kk"),
+        ("khm", "km"),
+        ("kik", "ki"),
+        ("kin", "rw"),
+        ("kir", "ky"),
+        ("kom", "kv"),
+        ("kon", "kg"),
+        ("kor", "ko"),
+        ("kua", "kj"),
+        ("kur", "ku"),
+        ("lao", "lo"),
+        ("lat", "la"),
+        ("lav", "lv"),
+        ("lim", "li"),
+        ("lin", "ln"),
+        ("lit", "lt"),
+        ("ltz", "lb"),
+        ("lub", "lu"),
+        ("lug", "lg"),
+        ("mac", "mk"),
+        ("mkd", "mk"),
+        ("mah", "mh"),
+        ("mal", "ml"),
+        ("mao", "mi"),
+        ("mri", "mi"),
+        ("mar", "mr"),
+        ("may", "ms"),
+        ("msa", "ms"),
+        ("mlg", "mg"),
+        ("mlt", "mt"),
+        ("mon", "mn"),
+        ("nau", "na"),
+        ("nav", "nv"),
+        ("nbl", "nr"),
+        ("nde", "nd"),
+        ("ndo", "ng"),
+        ("nep", "ne"),
+        ("nno", "nn"),
+        ("nob", "nb"),
+        ("nor", "no"),
+        ("nya", "ny"),
+        ("oci", "oc"),
+        ("oji", "oj"),
+        ("ori", "or"),
+        ("orm", "om"),
+        ("oss", "os"),
+        ("pan", "pa"),
+        ("pli", "pi"),
+        ("pol", "pl"),
+        ("por", "pt"),
+        ("pus", "ps"),
+        ("que", "qu"),
+        ("roh", "rm"),
+        ("ron", "ro"),
+        ("rum", "ro"),
+        ("run", "rn"),
+        ("rus", "ru"),
+        ("sag", "sg"),
+        ("san", "sa"),
+        ("sin", "si"),
+        ("slo", "sk"),
+        ("slk", "sk"),
+        ("slv", "sl"),
+        ("sme", "se"),
+        ("smo", "sm"),
+        ("sna", "sn"),
+        ("snd", "sd"),
+        ("som", "so"),
+        ("sot", "st"),
+        ("spa", "es"),
+        ("srd", "sc"),
+        ("srp", "sr"),
+        ("scc", "sr"),
+        ("ssw", "ss"),
+        ("sun", "su"),
+        ("swa", "sw"),
+        ("swe", "sv"),
+        ("tah", "ty"),
+        ("tam", "ta"),
+        ("tat", "tt"),
+        ("tel", "te"),
+        ("tgk", "tg"),
+        ("tgl", "tl"),
+        ("tha", "th"),
+        ("tir", "ti"),
+        ("ton", "to"),
+        ("tsn", "tn"),
+        ("tso", "ts"),
+        ("tuk", "tk"),
+        ("tur", "tr"),
+        ("twi", "tw"),
+        ("uig", "ug"),
+        ("ukr", "uk"),
+        ("urd", "ur"),
+        ("uzb", "uz"),
+        ("ven", "ve"),
+        ("vie", "vi"),
+        ("vol", "vo"),
+        ("wln", "wa"),
+        ("wol", "wo"),
+        ("xho", "xh"),
+        ("yid", "yi"),
+        ("yor", "yo"),
+        ("zha", "za"),
+        ("zul", "zu"),
+    ];
+
+    /// Convert ISO 639-2 (3-letter) to ISO 639-1 (2-letter) language code
+    pub fn lookup_2letter_lang(lang3: &str) -> Option<&'static str> {
+        LANG_CODES
+            .iter()
+            .find(|(code3, _)| *code3 == lang3)
+            .map(|(_, code2)| *code2)
+    }
+
+    /// Convert ISO 639-1 (2-letter) to ISO 639-2 (3-letter) language code
+    #[allow(dead_code)]
+    pub fn lookup_3letter_lang(lang2: &str) -> Option<&'static str> {
+        LANG_CODES
+            .iter()
+            .find(|(_, code2)| *code2 == lang2)
+            .map(|(code3, _)| *code3)
+    }
+
+    /// Decode packed language code from QuickTime format
+    /// QuickTime stores language as a 16-bit packed value
+    pub fn decode_packed_lang(packed: u16) -> String {
+        let c1 = ((packed >> 10) & 0x1F) as u8 + 0x60;
+        let c2 = ((packed >> 5) & 0x1F) as u8 + 0x60;
+        let c3 = (packed & 0x1F) as u8 + 0x60;
+        String::from_utf8(vec![c1, c2, c3]).unwrap_or_default()
+    }
+
+    /// QuickTime native metadata box types
+    pub const BOX_NAM: &[u8; 4] = b"\xa9nam"; // Title (©nam)
+    pub const BOX_ART: &[u8; 4] = b"\xa9ART"; // Artist (©ART)
+    pub const BOX_WRT: &[u8; 4] = b"\xa9wrt"; // Writer/Composer (©wrt)
+    pub const BOX_ALB: &[u8; 4] = b"\xa9alb"; // Album (©alb)
+    pub const BOX_DAY: &[u8; 4] = b"\xa9day"; // Date (©day)
+    pub const BOX_CMT: &[u8; 4] = b"\xa9cmt"; // Comment (©cmt)
+    pub const BOX_GEN: &[u8; 4] = b"\xa9gen"; // Genre (©gen)
+    pub const BOX_CPRT: &[u8; 4] = b"cprt"; // Copyright (ISO base media)
+    pub const BOX_CPY: &[u8; 4] = b"\xa9cpy"; // Copyright (©cpy, QuickTime)
+
+    /// Native metadata item
+    #[derive(Debug, Clone)]
+    pub struct NativeMetadataItem {
+        pub box_type: [u8; 4],
+        pub language: Option<String>, // 2-letter ISO 639-1 code
+        pub value: String,
+    }
+
+    /// Read QuickTime native metadata from udta box
+    pub fn read_native_metadata<R: Read + Seek>(
+        reader: &mut R,
+        udta_end: u64,
+    ) -> XmpResult<Vec<NativeMetadataItem>> {
+        let mut items = Vec::new();
+        let start_pos = reader.stream_position()?;
+
+        while reader.stream_position()? < udta_end {
+            let box_start = reader.stream_position()?;
+            let box_info = match Mpeg4Handler::read_box(reader) {
+                Ok(b) => b,
+                Err(_) => break,
+            };
+
+            // Check for known native metadata boxes
+            if is_native_metadata_box(&box_info.box_type) {
+                if let Some(item) = read_native_item(reader, &box_info)? {
+                    items.push(item);
+                }
+            }
+
+            // Move to next box
+            reader.seek(SeekFrom::Start(box_start + box_info.size))?;
+        }
+
+        reader.seek(SeekFrom::Start(start_pos))?;
+        Ok(items)
+    }
+
+    fn is_native_metadata_box(box_type: &[u8; 4]) -> bool {
+        box_type == BOX_NAM
+            || box_type == BOX_ART
+            || box_type == BOX_WRT
+            || box_type == BOX_ALB
+            || box_type == BOX_DAY
+            || box_type == BOX_CMT
+            || box_type == BOX_GEN
+            || box_type == BOX_CPRT
+            || box_type == BOX_CPY
+    }
+
+    fn read_native_item<R: Read + Seek>(
+        reader: &mut R,
+        box_info: &Mpeg4Box,
+    ) -> XmpResult<Option<NativeMetadataItem>> {
+        // QuickTime text item format:
+        // - 2 bytes: text length
+        // - 2 bytes: language code (packed)
+        // - N bytes: text data
+        let data_size = box_info.size - 8;
+        if data_size < 4 {
+            return Ok(None);
+        }
+
+        let mut header = [0u8; 4];
+        reader.read_exact(&mut header)?;
+
+        let text_len = u16::from_be_bytes([header[0], header[1]]) as usize;
+        let packed_lang = u16::from_be_bytes([header[2], header[3]]);
+
+        // Decode language
+        let lang3 = decode_packed_lang(packed_lang);
+        let language = lookup_2letter_lang(&lang3);
+
+        // Read text
+        let remaining = (data_size as usize) - 4;
+        let read_len = text_len.min(remaining);
+        let mut text_data = vec![0u8; read_len];
+        reader.read_exact(&mut text_data)?;
+
+        // Convert to string (assuming UTF-8 or MacRoman)
+        let value = String::from_utf8_lossy(&text_data).to_string();
+
+        Ok(Some(NativeMetadataItem {
+            box_type: box_info.box_type,
+            language: language.map(|s| s.to_string()),
+            value,
+        }))
+    }
+
+    /// Reconcile native metadata into XMP
+    /// Only adds properties that don't already exist in XMP
+    pub fn reconcile_to_xmp(meta: &mut XmpMeta, items: &[NativeMetadataItem]) {
+        for item in items {
+            let lang = item.language.as_deref().unwrap_or("x-default");
+
+            match &item.box_type {
+                b if b == BOX_NAM => {
+                    // ©nam -> dc:title
+                    if meta
+                        .get_localized_text(ns::DC, "title", lang, lang)
+                        .is_none()
+                    {
+                        let _ = meta.set_localized_text(ns::DC, "title", lang, lang, &item.value);
+                    }
+                }
+                b if b == BOX_ART => {
+                    // ©ART -> dc:creator (array)
+                    if meta.get_array_size(ns::DC, "creator").unwrap_or(0) == 0 {
+                        let _ =
+                            meta.append_array_item(ns::DC, "creator", item.value.clone().into());
+                    }
+                }
+                b if b == BOX_WRT => {
+                    // ©wrt -> dc:creator (if not already set)
+                    // Note: could also map to xmpDM:composer
+                    if meta.get_array_size(ns::DC, "creator").unwrap_or(0) == 0 {
+                        let _ =
+                            meta.append_array_item(ns::DC, "creator", item.value.clone().into());
+                    }
+                }
+                b if b == BOX_ALB => {
+                    // ©alb -> xmpDM:album
+                    if meta.get_property(ns::XMP_DM, "album").is_none() {
+                        let _ = meta.set_property(ns::XMP_DM, "album", item.value.clone().into());
+                    }
+                }
+                b if b == BOX_DAY => {
+                    // ©day -> dc:date or xmp:CreateDate
+                    // QuickTime date format is often just a year like "2024"
+                    if meta.get_property(ns::XMP, "CreateDate").is_none() {
+                        let _ = meta.set_property(ns::XMP, "CreateDate", item.value.clone().into());
+                    }
+                }
+                b if b == BOX_CMT => {
+                    // ©cmt -> dc:description
+                    if meta
+                        .get_localized_text(ns::DC, "description", lang, lang)
+                        .is_none()
+                    {
+                        let _ =
+                            meta.set_localized_text(ns::DC, "description", lang, lang, &item.value);
+                    }
+                }
+                b if b == BOX_GEN => {
+                    // ©gen -> xmpDM:genre
+                    if meta.get_property(ns::XMP_DM, "genre").is_none() {
+                        let _ = meta.set_property(ns::XMP_DM, "genre", item.value.clone().into());
+                    }
+                }
+                b if b == BOX_CPRT || b == BOX_CPY => {
+                    // cprt/©cpy -> dc:rights
+                    if meta
+                        .get_localized_text(ns::DC, "rights", lang, lang)
+                        .is_none()
+                    {
+                        let _ = meta.set_localized_text(ns::DC, "rights", lang, lang, &item.value);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1361,7 +1875,7 @@ mod tests {
     fn test_read_xmp_no_xmp() {
         let mp4_data = create_minimal_mp4();
         let reader = Cursor::new(mp4_data);
-        let result = Mpeg4Handler::read_xmp(reader).unwrap();
+        let result = Mpeg4Handler::read_xmp(reader, &XmpOptions::default()).unwrap();
         assert!(result.is_none());
     }
 
@@ -1369,7 +1883,7 @@ mod tests {
     fn test_invalid_mp4() {
         let invalid_data = vec![0x00, 0x01, 0x02, 0x03];
         let reader = Cursor::new(invalid_data);
-        let result = Mpeg4Handler::read_xmp(reader);
+        let result = Mpeg4Handler::read_xmp(reader, &XmpOptions::default());
         assert!(result.is_err());
     }
 
@@ -1390,7 +1904,7 @@ mod tests {
 
         // Read back XMP
         writer.set_position(0);
-        let result = Mpeg4Handler::read_xmp(writer).unwrap();
+        let result = Mpeg4Handler::read_xmp(writer, &XmpOptions::default()).unwrap();
         assert!(result.is_some());
 
         let read_meta = result.unwrap();
@@ -1401,5 +1915,123 @@ mod tests {
         } else {
             panic!("Expected string value");
         }
+    }
+}
+
+// Native metadata reconciliation tests
+#[cfg(test)]
+mod reconcile_tests {
+    use super::native_reconcile::*;
+    use crate::core::metadata::XmpMeta;
+    use crate::core::namespace::ns;
+
+    #[test]
+    fn test_lookup_2letter_lang() {
+        assert_eq!(lookup_2letter_lang("eng"), Some("en"));
+        assert_eq!(lookup_2letter_lang("jpn"), Some("ja"));
+        assert_eq!(lookup_2letter_lang("fra"), Some("fr"));
+        assert_eq!(lookup_2letter_lang("fre"), Some("fr")); // Alternative code
+        assert_eq!(lookup_2letter_lang("deu"), Some("de"));
+        assert_eq!(lookup_2letter_lang("ger"), Some("de")); // Alternative code
+        assert_eq!(lookup_2letter_lang("zho"), Some("zh"));
+        assert_eq!(lookup_2letter_lang("chi"), Some("zh")); // Alternative code
+        assert_eq!(lookup_2letter_lang("xxx"), None); // Unknown code
+    }
+
+    #[test]
+    fn test_lookup_3letter_lang() {
+        // 2->3 mapping returns first match in the table
+        // "en" matches "eng" -> "en" entry
+        assert_eq!(lookup_3letter_lang("en"), Some("eng"));
+    }
+
+    #[test]
+    fn test_decode_packed_lang() {
+        // "eng" packed: e=5, n=14, g=7 -> (5 << 10) | (14 << 5) | 7 = 5568 + 448 + 7 = 6023
+        // Actually the formula is: char - 0x60 then pack
+        // 'e' = 0x65, 'n' = 0x6E, 'g' = 0x67
+        // (0x65 - 0x60) = 5, (0x6E - 0x60) = 14, (0x67 - 0x60) = 7
+        // packed = (5 << 10) | (14 << 5) | 7 = 5120 + 448 + 7 = 5575
+        let packed = ((5u16) << 10) | ((14u16) << 5) | 7;
+        let decoded = decode_packed_lang(packed);
+        assert_eq!(decoded, "eng");
+    }
+
+    #[test]
+    fn test_reconcile_title_to_xmp() {
+        let mut meta = XmpMeta::new();
+        let items = vec![NativeMetadataItem {
+            box_type: *BOX_NAM,
+            language: Some("en".to_string()),
+            value: "Test Title".to_string(),
+        }];
+        reconcile_to_xmp(&mut meta, &items);
+
+        let title = meta.get_localized_text(ns::DC, "title", "en", "en");
+        assert!(title.is_some());
+        // get_localized_text returns (value, language)
+        assert_eq!(title.unwrap().0, "Test Title");
+    }
+
+    #[test]
+    fn test_reconcile_does_not_overwrite_existing() {
+        let mut meta = XmpMeta::new();
+        // Set an existing title
+        meta.set_localized_text(ns::DC, "title", "en", "en", "Existing Title")
+            .unwrap();
+
+        let items = vec![NativeMetadataItem {
+            box_type: *BOX_NAM,
+            language: Some("en".to_string()),
+            value: "New Title".to_string(),
+        }];
+        reconcile_to_xmp(&mut meta, &items);
+
+        // Title should remain unchanged
+        let title = meta.get_localized_text(ns::DC, "title", "en", "en");
+        assert_eq!(title.unwrap().0, "Existing Title");
+    }
+
+    #[test]
+    fn test_reconcile_multiple_items() {
+        let mut meta = XmpMeta::new();
+        let items = vec![
+            NativeMetadataItem {
+                box_type: *BOX_NAM,
+                language: Some("en".to_string()),
+                value: "My Video".to_string(),
+            },
+            NativeMetadataItem {
+                box_type: *BOX_ART,
+                language: Some("en".to_string()),
+                value: "John Doe".to_string(),
+            },
+            NativeMetadataItem {
+                box_type: *BOX_ALB,
+                language: None,
+                value: "My Album".to_string(),
+            },
+            NativeMetadataItem {
+                box_type: *BOX_CPRT,
+                language: Some("en".to_string()),
+                value: "© 2024 Example".to_string(),
+            },
+        ];
+        reconcile_to_xmp(&mut meta, &items);
+
+        let title = meta.get_localized_text(ns::DC, "title", "en", "en");
+        assert_eq!(title.unwrap().0, "My Video");
+
+        // Check creator array
+        let creator_size = meta.get_array_size(ns::DC, "creator").unwrap_or(0);
+        assert_eq!(creator_size, 1);
+
+        // Check album
+        let album = meta.get_property(ns::XMP_DM, "album");
+        assert!(album.is_some());
+
+        // Check rights
+        let rights = meta.get_localized_text(ns::DC, "rights", "en", "en");
+        assert_eq!(rights.unwrap().0, "© 2024 Example");
     }
 }
