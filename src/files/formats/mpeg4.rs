@@ -29,9 +29,9 @@ const BOX_TYPE_UUID: &[u8] = b"uuid";
 
 /// MP4 file handler for XMP metadata
 #[derive(Debug, Clone, Copy)]
-pub struct Mp4Handler;
+pub struct Mpeg4Handler;
 
-impl FileHandler for Mp4Handler {
+impl FileHandler for Mpeg4Handler {
     fn can_handle<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<bool> {
         // MP4 file format: first 4 bytes are box size, next 4 bytes are box type "ftyp"
         let pos = reader.stream_position()?;
@@ -84,7 +84,7 @@ impl FileHandler for Mp4Handler {
 }
 
 #[derive(Debug)]
-struct Mp4Box {
+struct Mpeg4Box {
     size: u64,
     box_type: [u8; 4],
     #[allow(dead_code)]
@@ -101,7 +101,7 @@ struct BoxLayoutInfo {
     new_offset: u64,
 }
 
-impl Mp4Handler {
+impl Mpeg4Handler {
     /// Read XMP metadata from an MP4 file
     ///
     /// # Arguments
@@ -261,7 +261,7 @@ impl Mp4Handler {
     /// Read XMP from UUID box if it matches XMP UUID
     fn read_xmp_from_uuid_box<R: Read + Seek>(
         reader: &mut R,
-        box_info: &Mp4Box,
+        box_info: &Mpeg4Box,
     ) -> XmpResult<Option<XmpMeta>> {
         // Read UUID (16 bytes)
         let mut uuid = [0u8; 16];
@@ -285,7 +285,7 @@ impl Mp4Handler {
     }
 
     /// Read an MP4 box header
-    fn read_box<R: Read + Seek>(reader: &mut R) -> std::io::Result<Mp4Box> {
+    fn read_box<R: Read + Seek>(reader: &mut R) -> std::io::Result<Mpeg4Box> {
         let data_offset = reader.stream_position()?;
 
         // Read box size (4 bytes, big-endian)
@@ -306,7 +306,7 @@ impl Mp4Handler {
             size
         };
 
-        Ok(Mp4Box {
+        Ok(Mpeg4Box {
             size: actual_size,
             box_type,
             data_offset,
@@ -1361,7 +1361,7 @@ mod tests {
     fn test_read_xmp_no_xmp() {
         let mp4_data = create_minimal_mp4();
         let reader = Cursor::new(mp4_data);
-        let result = Mp4Handler::read_xmp(reader).unwrap();
+        let result = Mpeg4Handler::read_xmp(reader).unwrap();
         assert!(result.is_none());
     }
 
@@ -1369,7 +1369,7 @@ mod tests {
     fn test_invalid_mp4() {
         let invalid_data = vec![0x00, 0x01, 0x02, 0x03];
         let reader = Cursor::new(invalid_data);
-        let result = Mp4Handler::read_xmp(reader);
+        let result = Mpeg4Handler::read_xmp(reader);
         assert!(result.is_err());
     }
 
@@ -1386,11 +1386,11 @@ mod tests {
             .unwrap();
 
         // Write XMP
-        Mp4Handler::write_xmp(reader, &mut writer, &meta).unwrap();
+        Mpeg4Handler::write_xmp(reader, &mut writer, &meta).unwrap();
 
         // Read back XMP
         writer.set_position(0);
-        let result = Mp4Handler::read_xmp(writer).unwrap();
+        let result = Mpeg4Handler::read_xmp(writer).unwrap();
         assert!(result.is_some());
 
         let read_meta = result.unwrap();

@@ -65,7 +65,7 @@ The files module (`src/files/`) provides file format support:
 - **TIFF**: IFD tags for XMP
 - **MP3**: ID3v2 PRIV frame for XMP
 - **GIF**: Application Extension for XMP
-- **MP4**: UUID box for XMP
+- **MPEG4**: UUID box for XMP
 
 ## Design Principles
 
