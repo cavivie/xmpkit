@@ -11,6 +11,8 @@ use std::io::{Read, Seek, Write};
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum Handler {
+    #[cfg(feature = "avi")]
+    Avi(crate::files::formats::riff::avi::AviHandler),
     #[cfg(feature = "gif")]
     Gif(crate::files::formats::gif::GifHandler),
     #[cfg(feature = "jpeg")]
@@ -29,13 +31,17 @@ pub enum Handler {
     Svg(crate::files::formats::svg::SvgHandler),
     #[cfg(feature = "tiff")]
     Tiff(crate::files::formats::tiff::TiffHandler),
+    #[cfg(feature = "wav")]
+    Wav(crate::files::formats::riff::wav::WavHandler),
     #[cfg(feature = "webp")]
-    Webp(crate::files::formats::webp::WebpHandler),
+    Webp(crate::files::formats::riff::webp::WebpHandler),
 }
 
 impl FileHandler for Handler {
     fn can_handle<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<bool> {
         match self {
+            #[cfg(feature = "avi")]
+            Handler::Avi(h) => h.can_handle(reader),
             #[cfg(feature = "gif")]
             Handler::Gif(h) => h.can_handle(reader),
             #[cfg(feature = "jpeg")]
@@ -54,6 +60,8 @@ impl FileHandler for Handler {
             Handler::Svg(h) => h.can_handle(reader),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.can_handle(reader),
+            #[cfg(feature = "wav")]
+            Handler::Wav(h) => h.can_handle(reader),
             #[cfg(feature = "webp")]
             Handler::Webp(h) => h.can_handle(reader),
         }
@@ -65,6 +73,8 @@ impl FileHandler for Handler {
         options: &XmpOptions,
     ) -> XmpResult<Option<crate::core::metadata::XmpMeta>> {
         match self {
+            #[cfg(feature = "avi")]
+            Handler::Avi(h) => h.read_xmp(reader, options),
             #[cfg(feature = "gif")]
             Handler::Gif(h) => h.read_xmp(reader, options),
             #[cfg(feature = "jpeg")]
@@ -83,6 +93,8 @@ impl FileHandler for Handler {
             Handler::Svg(h) => h.read_xmp(reader, options),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.read_xmp(reader, options),
+            #[cfg(feature = "wav")]
+            Handler::Wav(h) => h.read_xmp(reader, options),
             #[cfg(feature = "webp")]
             Handler::Webp(h) => h.read_xmp(reader, options),
         }
@@ -95,6 +107,8 @@ impl FileHandler for Handler {
         meta: &crate::core::metadata::XmpMeta,
     ) -> XmpResult<()> {
         match self {
+            #[cfg(feature = "avi")]
+            Handler::Avi(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "gif")]
             Handler::Gif(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "jpeg")]
@@ -113,6 +127,8 @@ impl FileHandler for Handler {
             Handler::Svg(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.write_xmp(reader, writer, meta),
+            #[cfg(feature = "wav")]
+            Handler::Wav(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "webp")]
             Handler::Webp(h) => h.write_xmp(reader, writer, meta),
         }
@@ -120,6 +136,8 @@ impl FileHandler for Handler {
 
     fn format_name(&self) -> &'static str {
         match self {
+            #[cfg(feature = "avi")]
+            Handler::Avi(h) => h.format_name(),
             #[cfg(feature = "gif")]
             Handler::Gif(h) => h.format_name(),
             #[cfg(feature = "jpeg")]
@@ -138,6 +156,8 @@ impl FileHandler for Handler {
             Handler::Svg(h) => h.format_name(),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.format_name(),
+            #[cfg(feature = "wav")]
+            Handler::Wav(h) => h.format_name(),
             #[cfg(feature = "webp")]
             Handler::Webp(h) => h.format_name(),
         }
@@ -145,6 +165,8 @@ impl FileHandler for Handler {
 
     fn extensions(&self) -> &'static [&'static str] {
         match self {
+            #[cfg(feature = "avi")]
+            Handler::Avi(h) => h.extensions(),
             #[cfg(feature = "gif")]
             Handler::Gif(h) => h.extensions(),
             #[cfg(feature = "jpeg")]
@@ -163,6 +185,8 @@ impl FileHandler for Handler {
             Handler::Svg(h) => h.extensions(),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.extensions(),
+            #[cfg(feature = "wav")]
+            Handler::Wav(h) => h.extensions(),
             #[cfg(feature = "webp")]
             Handler::Webp(h) => h.extensions(),
         }
@@ -189,8 +213,10 @@ impl HandlerRegistry {
         self.handlers.push(handler);
     }
 
-    /// Register default handlers (GIF, JPEG, MP3, MP4, PDF, PNG, TIFF)
+    /// Register default handlers
     fn register_defaults(&mut self) {
+        #[cfg(feature = "avi")]
+        self.register(Handler::Avi(crate::files::formats::riff::avi::AviHandler));
         #[cfg(feature = "gif")]
         self.register(Handler::Gif(crate::files::formats::gif::GifHandler));
         #[cfg(feature = "jpeg")]
@@ -209,8 +235,12 @@ impl HandlerRegistry {
         self.register(Handler::Svg(crate::files::formats::svg::SvgHandler));
         #[cfg(feature = "tiff")]
         self.register(Handler::Tiff(crate::files::formats::tiff::TiffHandler));
+        #[cfg(feature = "wav")]
+        self.register(Handler::Wav(crate::files::formats::riff::wav::WavHandler));
         #[cfg(feature = "webp")]
-        self.register(Handler::Webp(crate::files::formats::webp::WebpHandler));
+        self.register(Handler::Webp(
+            crate::files::formats::riff::webp::WebpHandler,
+        ));
     }
 
     /// Find a handler by file extension
