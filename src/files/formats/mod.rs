@@ -3,6 +3,13 @@
 //! Each format handler implements file format-specific logic for embedding
 //! and extracting XMP metadata. All handlers are pure Rust implementations
 //! that work across all platforms.
+//!
+//! ## Module Organization
+//!
+//! Formats are organized by their container type:
+//! - `riff/` - RIFF-based formats (WebP, WAV, AVI)
+//! - `bmff/` - ISO Base Media formats (future: HEIF, AVIF)
+//! - Individual modules for standalone formats
 
 #[cfg(feature = "gif")]
 pub mod gif;
@@ -22,5 +29,6 @@ pub mod psd;
 pub mod svg;
 #[cfg(feature = "tiff")]
 pub mod tiff;
-#[cfg(feature = "webp")]
-pub mod webp;
+
+#[cfg(any(feature = "webp", feature = "wav", feature = "avi"))]
+pub mod riff;
