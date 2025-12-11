@@ -9,16 +9,47 @@ repository = "https://github.com/cavivie/xmpkit"
 keywords = ["xmp", "metadata", "exif", "iptc"]
 categories = ["multimedia::images", "encoding"]
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[[bench]]
+name = "parse"
+harness = false
+
+[[bench]]
+name = "serialize"
+harness = false
+
+[[bench]]
+name = "file_io"
+harness = false
+
+[[bench]]
+name = "metadata_ops"
+harness = false
+
 [dependencies]
+# core
 quick-xml = { version = "0.38", features = ["serialize"], optional = true }
-lopdf = { version = "0.38", optional = true }
 thiserror = "2.0"
-wasm-bindgen = { version = "0.2", optional = true }
-js-sys = { version = "0.3", optional = true }
-napi-ohos = { version = "1", optional = true }
-napi-derive-ohos = { version = "1", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
+# files
+lopdf = { version = "0.38", optional = true }
+# ohos
+napi-ohos = { version = "1", optional = true }
+napi-derive-ohos = { version = "1", optional = true }
+js-sys = { version = "0.3", optional = true }
+# wasm
+wasm-bindgen = { version = "0.2", optional = true }
+
+[build-dependencies]
+napi-build-ohos = { version = "1", optional = true }
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+tempfile = "3.23"
+criterion = { version = "0.8", features = ["html_reports"] }
 
 [features]
 default = ["mutli-thread", "full-formats"]
@@ -37,6 +68,7 @@ mpeg4 = ["files"]
 pdf = ["files", "lopdf"]
 png = ["files"]
 tiff = ["files"]
+webp = ["files"]
 
 # Enable file layout optimization
 # Default: optimize-file-layout disabled - uses append mode (e.g., MPEG4: UUID box at end of file)
@@ -49,40 +81,13 @@ optimize-file-layout = []
 mutli-thread = []
 
 # Enable all file format handlers support
-full-formats = ["gif", "jpeg", "mp3", "mpeg4", "pdf", "png", "tiff"]
+full-formats = ["gif", "jpeg", "mp3", "mpeg4", "pdf", "png", "tiff", "webp"]
 
 # WebAssembly JavaScript bindings (optional)
 wasm = ["wasm-bindgen", "js-sys", "serde", "serde_json"]
 
 # OpenHarmony/HarmonyOS Node-API bindings (optional)
 ohos = ["napi-ohos", "napi-derive-ohos", "napi-build-ohos", "serde", "serde_json"]
-
-[build-dependencies]
-napi-build-ohos = { version = "1", optional = true }
-
-[dev-dependencies]
-pretty_assertions = "1.4"
-tempfile = "3.23"
-criterion = { version = "0.8", features = ["html_reports"] }
-
-[[bench]]
-name = "parse"
-harness = false
-
-[[bench]]
-name = "serialize"
-harness = false
-
-[[bench]]
-name = "file_io"
-harness = false
-
-[[bench]]
-name = "metadata_ops"
-harness = false
-
-[lib]
-crate-type = ["rlib", "cdylib"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_ohos)'] }

@@ -34,7 +34,7 @@ XMPKit is a pure Rust implementation of Adobe's XMP (Extensible Metadata Platfor
 
 - Pure Rust implementation (no C++ dependencies)
 - Compatible with Adobe XMP standard
-- Support for common file formats (JPEG, PNG, TIFF, GIF, MP3, MPEG4, PDF)
+- Support for common file formats (JPEG, PNG, TIFF, GIF, MP3, MPEG4, PDF, WebP)
 - Memory safe and high performance
 - Zero-cost abstractions
 - Cross-platform support (iOS, Android, HarmonyOS, macOS, Windows, Linux, Wasm)
@@ -108,7 +108,7 @@ For WebAssembly/JavaScript integration, see [WEBASSEMBLY.md](docs/WEBASSEMBLY.md
 | GIF | .gif | Yes | Yes | Fully supported |
 | MPEG4 | .mp4, .m4a, .m4v, .mov | Yes | Yes | Fully supported |
 | PDF | .pdf | Yes | Yes | Fully supported |
-| WebP | .webp | No | No | Planned |
+| WebP | .webp | No | No | Fully supported |
 
 ### Platform Support
 
@@ -120,8 +120,8 @@ For WebAssembly/JavaScript integration, see [WEBASSEMBLY.md](docs/WEBASSEMBLY.md
 | Windows | x86_64, arm64 | Yes | Yes | Fully supported |
 | iOS | arm64 | Yes | Yes | Fully supported |
 | Android | arm64, armv7, x86_64 | Yes | Yes | Fully supported |
-| HarmonyOS | arm64, armv7, x86_64 | Yes | Yes | Fully supported (use `ohos` feature for Node-API bindings) |
-| WebAssembly | wasm32 | No | Yes | Partial (use `from_bytes()` / `from_reader()`, see [WEBASSEMBLY](docs/WEBASSEMBLY.md)) |
+| HarmonyOS | arm64, armv7, x86_64 | Yes | Yes | Fully supported |
+| WebAssembly | wasm32 | No | Yes | [Partially Supported](docs/WEBASSEMBLY.md) |
 <!-- markdownlint-enable MD056 -->
 
 ## Contributing

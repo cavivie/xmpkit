@@ -18,3 +18,5 @@ pub mod pdf;
 pub mod png;
 #[cfg(feature = "tiff")]
 pub mod tiff;
+#[cfg(feature = "webp")]
+pub mod webp;
