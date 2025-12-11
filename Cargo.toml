@@ -68,6 +68,7 @@ mpeg4 = ["files"]
 pdf = ["files", "lopdf"]
 png = ["files"]
 psd = ["files"]
+svg = ["files"]
 tiff = ["files"]
 webp = ["files"]
 
@@ -82,7 +83,7 @@ optimize-file-layout = []
 mutli-thread = []
 
 # Enable all file format handlers support
-full-formats = ["gif", "jpeg", "mp3", "mpeg4", "pdf", "png", "psd", "tiff", "webp"]
+full-formats = ["gif", "jpeg", "mp3", "mpeg4", "pdf", "png", "psd", "svg", "tiff", "webp"]
 
 # WebAssembly JavaScript bindings (optional)
 wasm = ["wasm-bindgen", "js-sys", "serde", "serde_json"]

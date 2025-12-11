@@ -18,6 +18,8 @@ pub mod pdf;
 pub mod png;
 #[cfg(feature = "psd")]
 pub mod psd;
+#[cfg(feature = "svg")]
+pub mod svg;
 #[cfg(feature = "tiff")]
 pub mod tiff;
 #[cfg(feature = "webp")]
