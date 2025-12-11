@@ -25,6 +25,8 @@ pub enum Handler {
     Png(crate::files::formats::png::PngHandler),
     #[cfg(feature = "tiff")]
     Tiff(crate::files::formats::tiff::TiffHandler),
+    #[cfg(feature = "webp")]
+    Webp(crate::files::formats::webp::WebpHandler),
 }
 
 impl FileHandler for Handler {
@@ -44,6 +46,8 @@ impl FileHandler for Handler {
             Handler::Png(h) => h.can_handle(reader),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.can_handle(reader),
+            #[cfg(feature = "webp")]
+            Handler::Webp(h) => h.can_handle(reader),
         }
     }
 
@@ -67,6 +71,8 @@ impl FileHandler for Handler {
             Handler::Png(h) => h.read_xmp(reader, options),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.read_xmp(reader, options),
+            #[cfg(feature = "webp")]
+            Handler::Webp(h) => h.read_xmp(reader, options),
         }
     }
 
@@ -91,6 +97,8 @@ impl FileHandler for Handler {
             Handler::Png(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.write_xmp(reader, writer, meta),
+            #[cfg(feature = "webp")]
+            Handler::Webp(h) => h.write_xmp(reader, writer, meta),
         }
     }
 
@@ -110,6 +118,8 @@ impl FileHandler for Handler {
             Handler::Png(h) => h.format_name(),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.format_name(),
+            #[cfg(feature = "webp")]
+            Handler::Webp(h) => h.format_name(),
         }
     }
 
@@ -129,6 +139,8 @@ impl FileHandler for Handler {
             Handler::Png(h) => h.extensions(),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.extensions(),
+            #[cfg(feature = "webp")]
+            Handler::Webp(h) => h.extensions(),
         }
     }
 }
@@ -169,6 +181,8 @@ impl HandlerRegistry {
         self.register(Handler::Png(crate::files::formats::png::PngHandler));
         #[cfg(feature = "tiff")]
         self.register(Handler::Tiff(crate::files::formats::tiff::TiffHandler));
+        #[cfg(feature = "webp")]
+        self.register(Handler::Webp(crate::files::formats::webp::WebpHandler));
     }
 
     /// Find a handler by file extension
@@ -285,6 +299,9 @@ mod tests {
             assert!(registry.find_by_extension("tiff").is_some());
         }
 
+        #[cfg(feature = "webp")]
+        assert!(registry.find_by_extension("webp").is_some());
+
         // Unknown extension
         assert!(registry.find_by_extension("unknown").is_none());
         assert!(registry.find_by_extension("xyz").is_none());
@@ -389,6 +406,22 @@ mod tests {
         let handler = registry.find_by_detection(&mut reader).unwrap();
         assert!(handler.is_some());
         assert_eq!(handler.unwrap().format_name(), "TIFF");
+    }
+
+    #[cfg(feature = "webp")]
+    #[test]
+    fn test_find_by_detection_webp() {
+        let registry = HandlerRegistry::new();
+        // WebP RIFF signature: RIFF + size + WEBP
+        let webp_data = vec![
+            0x52, 0x49, 0x46, 0x46, // "RIFF"
+            0x00, 0x00, 0x00, 0x00, // file size (placeholder)
+            0x57, 0x45, 0x42, 0x50, // "WEBP"
+        ];
+        let mut reader = Cursor::new(webp_data);
+        let handler = registry.find_by_detection(&mut reader).unwrap();
+        assert!(handler.is_some());
+        assert_eq!(handler.unwrap().format_name(), "WebP");
     }
 
     #[test]
