@@ -106,6 +106,7 @@ For WebAssembly/JavaScript integration, see [WEBASSEMBLY.md](docs/WEBASSEMBLY.md
 | GIF | .gif | Yes | Yes | Fully supported |
 | TIFF | .tif, .tiff | Yes | Yes | Fully supported |
 | PSD | .psd, .psb | Yes | Yes | Fully supported |
+| SVG | .svg | Yes | Yes | Fully supported |
 | WebP | .webp | Yes | Yes | Fully supported |
 | MP3 | .mp3 | Yes | Yes | Fully supported |
 | MPEG4 | .mp4, .m4a, .m4v, .mov | Yes | Yes | Fully supported |

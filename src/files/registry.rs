@@ -25,6 +25,8 @@ pub enum Handler {
     Png(crate::files::formats::png::PngHandler),
     #[cfg(feature = "psd")]
     Psd(crate::files::formats::psd::PsdHandler),
+    #[cfg(feature = "svg")]
+    Svg(crate::files::formats::svg::SvgHandler),
     #[cfg(feature = "tiff")]
     Tiff(crate::files::formats::tiff::TiffHandler),
     #[cfg(feature = "webp")]
@@ -48,6 +50,8 @@ impl FileHandler for Handler {
             Handler::Png(h) => h.can_handle(reader),
             #[cfg(feature = "psd")]
             Handler::Psd(h) => h.can_handle(reader),
+            #[cfg(feature = "svg")]
+            Handler::Svg(h) => h.can_handle(reader),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.can_handle(reader),
             #[cfg(feature = "webp")]
@@ -75,6 +79,8 @@ impl FileHandler for Handler {
             Handler::Png(h) => h.read_xmp(reader, options),
             #[cfg(feature = "psd")]
             Handler::Psd(h) => h.read_xmp(reader, options),
+            #[cfg(feature = "svg")]
+            Handler::Svg(h) => h.read_xmp(reader, options),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.read_xmp(reader, options),
             #[cfg(feature = "webp")]
@@ -103,6 +109,8 @@ impl FileHandler for Handler {
             Handler::Png(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "psd")]
             Handler::Psd(h) => h.write_xmp(reader, writer, meta),
+            #[cfg(feature = "svg")]
+            Handler::Svg(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "webp")]
@@ -126,6 +134,8 @@ impl FileHandler for Handler {
             Handler::Png(h) => h.format_name(),
             #[cfg(feature = "psd")]
             Handler::Psd(h) => h.format_name(),
+            #[cfg(feature = "svg")]
+            Handler::Svg(h) => h.format_name(),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.format_name(),
             #[cfg(feature = "webp")]
@@ -149,6 +159,8 @@ impl FileHandler for Handler {
             Handler::Png(h) => h.extensions(),
             #[cfg(feature = "psd")]
             Handler::Psd(h) => h.extensions(),
+            #[cfg(feature = "svg")]
+            Handler::Svg(h) => h.extensions(),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.extensions(),
             #[cfg(feature = "webp")]
@@ -193,6 +205,8 @@ impl HandlerRegistry {
         self.register(Handler::Png(crate::files::formats::png::PngHandler));
         #[cfg(feature = "psd")]
         self.register(Handler::Psd(crate::files::formats::psd::PsdHandler));
+        #[cfg(feature = "svg")]
+        self.register(Handler::Svg(crate::files::formats::svg::SvgHandler));
         #[cfg(feature = "tiff")]
         self.register(Handler::Tiff(crate::files::formats::tiff::TiffHandler));
         #[cfg(feature = "webp")]
@@ -321,6 +335,9 @@ mod tests {
             assert!(registry.find_by_extension("psd").is_some());
             assert!(registry.find_by_extension("psb").is_some());
         }
+
+        #[cfg(feature = "svg")]
+        assert!(registry.find_by_extension("svg").is_some());
 
         // Unknown extension
         assert!(registry.find_by_extension("unknown").is_none());
@@ -482,6 +499,20 @@ mod tests {
         let handler = registry.find_by_detection(&mut reader).unwrap();
         assert!(handler.is_some());
         assert_eq!(handler.unwrap().format_name(), "PSD");
+    }
+
+    #[cfg(feature = "svg")]
+    #[test]
+    fn test_find_by_detection_svg() {
+        let registry = HandlerRegistry::new();
+        // SVG with XML declaration
+        let svg_data = br#"<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+</svg>"#;
+        let mut reader = Cursor::new(svg_data.to_vec());
+        let handler = registry.find_by_detection(&mut reader).unwrap();
+        assert!(handler.is_some());
+        assert_eq!(handler.unwrap().format_name(), "SVG");
     }
 
     #[test]
