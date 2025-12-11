@@ -388,8 +388,16 @@ mod tests {
     #[test]
     fn test_find_by_detection_tiff_le() {
         let registry = HandlerRegistry::new();
-        // TIFF little-endian signature
-        let tiff_data = vec![0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00];
+        // TIFF little-endian: header(8) + IFD count(2) + 1 entry(12) + next IFD(4) = 26 bytes
+        let mut tiff_data = vec![
+            0x49, 0x49, 0x2A, 0x00, // II + magic 42 (LE)
+            0x08, 0x00, 0x00, 0x00, // IFD offset = 8
+            0x01, 0x00, // 1 IFD entry
+            0x00, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, // dummy entry
+            0x00, 0x00, 0x00, 0x00, // next IFD = 0
+        ];
+        tiff_data.resize(26, 0);
         let mut reader = Cursor::new(tiff_data);
         let handler = registry.find_by_detection(&mut reader).unwrap();
         assert!(handler.is_some());
@@ -400,8 +408,16 @@ mod tests {
     #[test]
     fn test_find_by_detection_tiff_be() {
         let registry = HandlerRegistry::new();
-        // TIFF big-endian signature
-        let tiff_data = vec![0x4D, 0x4D, 0x00, 0x2A, 0x00, 0x00, 0x00, 0x08];
+        // TIFF big-endian: header(8) + IFD count(2) + 1 entry(12) + next IFD(4) = 26 bytes
+        let mut tiff_data = vec![
+            0x4D, 0x4D, 0x00, 0x2A, // MM + magic 42 (BE)
+            0x00, 0x00, 0x00, 0x08, // IFD offset = 8
+            0x00, 0x01, // 1 IFD entry
+            0x01, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+            0x00, // dummy entry
+            0x00, 0x00, 0x00, 0x00, // next IFD = 0
+        ];
+        tiff_data.resize(26, 0);
         let mut reader = Cursor::new(tiff_data);
         let handler = registry.find_by_detection(&mut reader).unwrap();
         assert!(handler.is_some());

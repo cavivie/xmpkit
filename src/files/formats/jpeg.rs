@@ -40,11 +40,60 @@ const MAX_APP1_SIZE: usize = 65533;
 pub struct JpegHandler;
 
 impl FileHandler for JpegHandler {
+    /// Check if this is a valid JPEG file:
+    /// 1. Check for SOI marker (0xFFD8) at offset 0
+    /// 2. Skip any 0xFF padding bytes
+    /// 3. Validate the second marker ID
     fn can_handle<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<bool> {
-        let mut header = [0u8; 2];
-        reader.read_exact(&mut header)?;
-        reader.rewind()?;
-        Ok(header[0] == 0xFF && header[1] == MARKER_SOI)
+        let pos = reader.stream_position()?;
+
+        // Need at least the SOI marker
+        let file_len = reader.seek(SeekFrom::End(0))?;
+        reader.seek(SeekFrom::Start(pos))?;
+        if file_len < 2 {
+            return Ok(false);
+        }
+
+        // Read up to 100 bytes for validation
+        let mut buffer = [0u8; 100];
+        let bytes_read = reader.read(&mut buffer)?;
+        reader.seek(SeekFrom::Start(pos))?;
+
+        if bytes_read < 2 {
+            return Ok(false);
+        }
+
+        // Offset 0 must have the SOI marker (0xFFD8)
+        if buffer[0] != 0xFF || buffer[1] != MARKER_SOI {
+            return Ok(false);
+        }
+
+        // Skip 0xFF padding and high order 0xFF of next marker
+        let mut buffer_pos = 2;
+        while buffer_pos < bytes_read && buffer[buffer_pos] == 0xFF {
+            buffer_pos += 1;
+        }
+
+        // Nothing but 0xFF bytes after SOI, close enough
+        if buffer_pos >= bytes_read {
+            return Ok(true);
+        }
+
+        // Check the ID of the second marker
+        let id = buffer[buffer_pos];
+
+        // Most probable cases: RST markers, SOI, SOS, etc.
+        if id >= 0xDD {
+            return Ok(true);
+        }
+
+        // Invalid markers: standalone markers (0xD0-0xD7 RST, 0xD8 SOI, 0xDA SOS, 0xDC DNL)
+        // and anything below 0xC0
+        if id < 0xC0 || (id & 0xF8) == 0xD0 || id == 0xD8 || id == 0xDA || id == 0xDC {
+            return Ok(false);
+        }
+
+        Ok(true)
     }
 
     fn read_xmp<R: Read + Seek>(

@@ -32,32 +32,52 @@ const BOX_TYPE_UUID: &[u8] = b"uuid";
 pub struct Mpeg4Handler;
 
 impl FileHandler for Mpeg4Handler {
+    /// Check if this is a valid MPEG-4/QuickTime file:
+    /// 1. File length >= 8 bytes
+    /// 2. First box has valid header (size >= 8)
+    /// 3. First box is 'ftyp' (ISO) or check for QuickTime patterns
     fn can_handle<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<bool> {
-        // MP4 file format: first 4 bytes are box size, next 4 bytes are box type "ftyp"
         let pos = reader.stream_position()?;
 
-        // Read box size (4 bytes, big-endian)
-        let mut size_bytes = [0u8; 4];
-        match reader.read_exact(&mut size_bytes) {
-            Ok(_) => {}
-            Err(_) => {
-                reader.seek(SeekFrom::Start(pos))?;
-                return Ok(false);
+        // Check minimum file length
+        let file_len = reader.seek(SeekFrom::End(0))?;
+        reader.seek(SeekFrom::Start(pos))?;
+        if file_len < 8 {
+            return Ok(false);
+        }
+
+        // Read first box header (size + type)
+        let mut header = [0u8; 8];
+        if reader.read_exact(&mut header).is_err() {
+            reader.seek(SeekFrom::Start(pos))?;
+            return Ok(false);
+        }
+        reader.seek(SeekFrom::Start(pos))?;
+
+        let box_size = u32::from_be_bytes([header[0], header[1], header[2], header[3]]);
+        let box_type = &header[4..8];
+
+        // Box size must be at least 8 (header size) for a valid ISO/QuickTime file
+        // Special case: size 0 means "extends to EOF", size 1 means 64-bit extended size
+        if box_size != 0 && box_size != 1 && box_size < 8 {
+            return Ok(false);
+        }
+
+        // Check for 'ftyp' box (ISO Base Media File Format)
+        if box_type == MP4_SIGNATURE {
+            return Ok(true);
+        }
+
+        // Also accept QuickTime files that may start with other boxes
+        // Common QuickTime boxes: 'moov', 'mdat', 'wide', 'free', 'skip', 'pnot'
+        let qt_boxes = [b"moov", b"mdat", b"wide", b"free", b"skip", b"pnot"];
+        for qt_box in &qt_boxes {
+            if box_type == *qt_box {
+                return Ok(true);
             }
         }
 
-        // Read box type (4 bytes)
-        let mut box_type = [0u8; 4];
-        match reader.read_exact(&mut box_type) {
-            Ok(_) => {
-                reader.seek(SeekFrom::Start(pos))?;
-                Ok(box_type == *MP4_SIGNATURE)
-            }
-            Err(_) => {
-                reader.seek(SeekFrom::Start(pos))?;
-                Ok(false)
-            }
-        }
+        Ok(false)
     }
 
     fn read_xmp<R: Read + Seek>(

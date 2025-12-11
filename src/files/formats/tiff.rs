@@ -33,11 +33,34 @@ const IFD_ENTRY_SIZE: usize = 12;
 pub struct TiffHandler;
 
 impl FileHandler for TiffHandler {
+    /// Check if this is a valid TIFF file:
+    /// 1. File length >= minimal TIFF size (header + IFD with 1 entry)
+    /// 2. Check II (little-endian) or MM (big-endian) signature with magic number 42
     fn can_handle<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<bool> {
+        let pos = reader.stream_position()?;
+
+        // Minimal TIFF size: Header(8) + IFD entry count(2) + 1 entry(12) + next IFD offset(4) = 26
+        const MINIMAL_TIFF_SIZE: u64 = 4 + 4 + 2 + 12 + 4;
+
+        // Check minimum file length
+        let file_len = reader.seek(SeekFrom::End(0))?;
+        reader.seek(SeekFrom::Start(pos))?;
+        if file_len < MINIMAL_TIFF_SIZE {
+            return Ok(false);
+        }
+
         let mut header = [0u8; 4];
-        reader.read_exact(&mut header)?;
-        reader.rewind()?;
-        Ok(header[0..4] == *TIFF_SIGNATURE_LE || header[0..4] == *TIFF_SIGNATURE_BE)
+        if reader.read_exact(&mut header).is_err() {
+            reader.seek(SeekFrom::Start(pos))?;
+            return Ok(false);
+        }
+        reader.seek(SeekFrom::Start(pos))?;
+
+        // Check for little-endian (II, 0x2A00) or big-endian (MM, 0x002A)
+        let is_le = header == *TIFF_SIGNATURE_LE;
+        let is_be = header == *TIFF_SIGNATURE_BE;
+
+        Ok(is_le || is_be)
     }
 
     fn read_xmp<R: Read + Seek>(

@@ -47,8 +47,20 @@ const VP8X_XMP_FLAG: u8 = 0x04;
 pub struct WebpHandler;
 
 impl FileHandler for WebpHandler {
+    /// Check if this is a valid WebP file:
+    /// 1. File length >= 12 bytes (RIFF header)
+    /// 2. Check "RIFF" signature at offset 0
+    /// 3. Check "WEBP" signature at offset 8
     fn can_handle<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<bool> {
         let pos = reader.stream_position()?;
+
+        // Check minimum file length
+        let file_len = reader.seek(SeekFrom::End(0))?;
+        reader.seek(SeekFrom::Start(pos))?;
+        if file_len < 12 {
+            return Ok(false);
+        }
+
         let mut header = [0u8; 12];
         match reader.read_exact(&mut header) {
             Ok(_) => {

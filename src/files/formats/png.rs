@@ -11,7 +11,7 @@
 use crate::core::error::{XmpError, XmpResult};
 use crate::core::metadata::XmpMeta;
 use crate::files::handler::{FileHandler, XmpOptions};
-use std::io::{Read, Seek, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 
 /// PNG file signature
 const PNG_SIGNATURE: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
@@ -30,11 +30,26 @@ const CHUNK_TYPE_IEND: &[u8] = b"IEND";
 pub struct PngHandler;
 
 impl FileHandler for PngHandler {
+    /// Check if this is a valid PNG file:
+    /// 1. File length >= 8 bytes
+    /// 2. Check PNG signature (89 50 4E 47 0D 0A 1A 0A)
     fn can_handle<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<bool> {
+        let pos = reader.stream_position()?;
+
+        // Check minimum file length
+        let file_len = reader.seek(SeekFrom::End(0))?;
+        reader.seek(SeekFrom::Start(pos))?;
+        if file_len < 8 {
+            return Ok(false);
+        }
+
         let mut signature = [0u8; 8];
-        reader.read_exact(&mut signature)?;
-        reader.rewind()?;
-        Ok(signature == PNG_SIGNATURE)
+        if reader.read_exact(&mut signature).is_err() {
+            reader.seek(SeekFrom::Start(pos))?;
+            return Ok(false);
+        }
+        reader.seek(SeekFrom::Start(pos))?;
+        Ok(signature == *PNG_SIGNATURE)
     }
 
     fn read_xmp<R: Read + Seek>(

@@ -36,8 +36,19 @@ enum ExtensionResult {
 }
 
 impl FileHandler for GifHandler {
+    /// Check if this is a valid GIF file:
+    /// 1. File length >= 6 bytes
+    /// 2. Check GIF87a or GIF89a signature
     fn can_handle<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<bool> {
         let pos = reader.stream_position()?;
+
+        // Check minimum file length
+        let file_len = reader.seek(SeekFrom::End(0))?;
+        reader.seek(SeekFrom::Start(pos))?;
+        if file_len < 6 {
+            return Ok(false);
+        }
+
         let mut header = [0u8; 6];
         match reader.read_exact(&mut header) {
             Ok(_) => {

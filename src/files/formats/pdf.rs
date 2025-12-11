@@ -14,7 +14,7 @@ use crate::core::error::{XmpError, XmpResult};
 use crate::core::metadata::XmpMeta;
 use crate::files::handler::{FileHandler, XmpOptions};
 use lopdf::{dictionary, Document, Object, Stream};
-use std::io::{Read, Seek, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 
 /// PDF file signature
 const PDF_SIGNATURE: &[u8] = b"%PDF-";
@@ -24,14 +24,26 @@ const PDF_SIGNATURE: &[u8] = b"%PDF-";
 pub struct PdfHandler;
 
 impl FileHandler for PdfHandler {
+    /// Check if this is a valid PDF file:
+    /// 1. File length >= 5 bytes
+    /// 2. Check "%PDF-" signature at start
     fn can_handle<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<bool> {
-        let mut header = [0u8; 5];
-        if reader.read_exact(&mut header).is_err() {
-            reader.rewind()?;
+        let pos = reader.stream_position()?;
+
+        // Check minimum file length
+        let file_len = reader.seek(SeekFrom::End(0))?;
+        reader.seek(SeekFrom::Start(pos))?;
+        if file_len < 5 {
             return Ok(false);
         }
-        reader.rewind()?;
-        Ok(header == PDF_SIGNATURE)
+
+        let mut header = [0u8; 5];
+        if reader.read_exact(&mut header).is_err() {
+            reader.seek(SeekFrom::Start(pos))?;
+            return Ok(false);
+        }
+        reader.seek(SeekFrom::Start(pos))?;
+        Ok(header == *PDF_SIGNATURE)
     }
 
     fn read_xmp<R: Read + Seek>(

@@ -36,11 +36,60 @@ const XMP_PREFIX: &[u8] = b"XMP\0";
 pub struct Mp3Handler;
 
 impl FileHandler for Mp3Handler {
+    /// Check if this is a valid MP3 file with ID3v2 tag:
+    /// 1. File length >= 10 bytes (ID3 tag header size)
+    /// 2. Check "ID3" signature
+    /// 3. Validate ID3v2 version (2.2, 2.3, or 2.4)
+    /// 4. Validate flags (no footer, no unsync for now)
+    /// 5. Validate synchsafe size
     fn can_handle<R: Read + Seek>(&self, reader: &mut R) -> XmpResult<bool> {
-        let mut header = [0u8; 3];
-        reader.read_exact(&mut header)?;
-        reader.rewind()?;
-        Ok(header == *b"ID3")
+        let pos = reader.stream_position()?;
+
+        // Check minimum file length
+        let file_len = reader.seek(SeekFrom::End(0))?;
+        reader.seek(SeekFrom::Start(pos))?;
+        if file_len < 10 {
+            return Ok(false);
+        }
+
+        // Read ID3 header
+        let mut header = [0u8; 10];
+        if reader.read_exact(&mut header).is_err() {
+            reader.seek(SeekFrom::Start(pos))?;
+            return Ok(false);
+        }
+        reader.seek(SeekFrom::Start(pos))?;
+
+        // Check "ID3" signature
+        if &header[0..3] != b"ID3" {
+            return Ok(false);
+        }
+
+        // Check version: major (2-4), minor (!= 0xFF)
+        let major = header[3];
+        let minor = header[4];
+        if !(2..=4).contains(&major) || minor == 0xFF {
+            return Ok(false);
+        }
+
+        // Check flags
+        let flags = header[5];
+        // Bit 7: unsynchronization - not supported
+        if (flags & 0x80) != 0 {
+            return Ok(false);
+        }
+        // Lower 4 bits must be 0
+        if (flags & 0x0F) != 0 {
+            return Ok(false);
+        }
+
+        // Check synchsafe size (no bit 7 set in any byte)
+        let size_bytes = &header[6..10];
+        if (size_bytes[0] | size_bytes[1] | size_bytes[2] | size_bytes[3]) & 0x80 != 0 {
+            return Ok(false);
+        }
+
+        Ok(true)
     }
 
     fn read_xmp<R: Read + Seek>(
