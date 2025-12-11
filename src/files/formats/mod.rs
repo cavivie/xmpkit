@@ -16,6 +16,8 @@ pub mod mpeg4;
 pub mod pdf;
 #[cfg(feature = "png")]
 pub mod png;
+#[cfg(feature = "psd")]
+pub mod psd;
 #[cfg(feature = "tiff")]
 pub mod tiff;
 #[cfg(feature = "webp")]

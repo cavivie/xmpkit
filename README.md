@@ -32,12 +32,12 @@ XMPKit is a pure Rust implementation of Adobe's XMP (Extensible Metadata Platfor
 
 ## Features
 
-- Pure Rust implementation (no C++ dependencies)
+- Pure Rust implementation
 - Compatible with Adobe XMP standard
-- Support for common file formats (JPEG, PNG, TIFF, GIF, MP3, MPEG4, PDF, WebP)
+- Support for common file formats
 - Memory safe and high performance
 - Zero-cost abstractions
-- Cross-platform support (iOS, Android, HarmonyOS, macOS, Windows, Linux, Wasm)
+- Cross-platform support
 
 ### Optional Features
 
@@ -103,12 +103,13 @@ For WebAssembly/JavaScript integration, see [WEBASSEMBLY.md](docs/WEBASSEMBLY.md
 |--------|-----------|----------|-----------|--------|
 | JPEG | .jpg, .jpeg | Yes | Yes | Fully supported |
 | PNG | .png | Yes | Yes | Fully supported |
-| TIFF | .tif, .tiff | Yes | Yes | Fully supported |
-| MP3 | .mp3 | Yes | Yes | Fully supported |
 | GIF | .gif | Yes | Yes | Fully supported |
+| TIFF | .tif, .tiff | Yes | Yes | Fully supported |
+| PSD | .psd, .psb | Yes | Yes | Fully supported |
+| WebP | .webp | Yes | Yes | Fully supported |
+| MP3 | .mp3 | Yes | Yes | Fully supported |
 | MPEG4 | .mp4, .m4a, .m4v, .mov | Yes | Yes | Fully supported |
 | PDF | .pdf | Yes | Yes | Fully supported |
-| WebP | .webp | No | No | Fully supported |
 
 ### Platform Support
 

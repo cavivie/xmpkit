@@ -23,6 +23,8 @@ pub enum Handler {
     Pdf(crate::files::formats::pdf::PdfHandler),
     #[cfg(feature = "png")]
     Png(crate::files::formats::png::PngHandler),
+    #[cfg(feature = "psd")]
+    Psd(crate::files::formats::psd::PsdHandler),
     #[cfg(feature = "tiff")]
     Tiff(crate::files::formats::tiff::TiffHandler),
     #[cfg(feature = "webp")]
@@ -44,6 +46,8 @@ impl FileHandler for Handler {
             Handler::Pdf(h) => h.can_handle(reader),
             #[cfg(feature = "png")]
             Handler::Png(h) => h.can_handle(reader),
+            #[cfg(feature = "psd")]
+            Handler::Psd(h) => h.can_handle(reader),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.can_handle(reader),
             #[cfg(feature = "webp")]
@@ -69,6 +73,8 @@ impl FileHandler for Handler {
             Handler::Pdf(h) => h.read_xmp(reader, options),
             #[cfg(feature = "png")]
             Handler::Png(h) => h.read_xmp(reader, options),
+            #[cfg(feature = "psd")]
+            Handler::Psd(h) => h.read_xmp(reader, options),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.read_xmp(reader, options),
             #[cfg(feature = "webp")]
@@ -95,6 +101,8 @@ impl FileHandler for Handler {
             Handler::Pdf(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "png")]
             Handler::Png(h) => h.write_xmp(reader, writer, meta),
+            #[cfg(feature = "psd")]
+            Handler::Psd(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.write_xmp(reader, writer, meta),
             #[cfg(feature = "webp")]
@@ -116,6 +124,8 @@ impl FileHandler for Handler {
             Handler::Pdf(h) => h.format_name(),
             #[cfg(feature = "png")]
             Handler::Png(h) => h.format_name(),
+            #[cfg(feature = "psd")]
+            Handler::Psd(h) => h.format_name(),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.format_name(),
             #[cfg(feature = "webp")]
@@ -137,6 +147,8 @@ impl FileHandler for Handler {
             Handler::Pdf(h) => h.extensions(),
             #[cfg(feature = "png")]
             Handler::Png(h) => h.extensions(),
+            #[cfg(feature = "psd")]
+            Handler::Psd(h) => h.extensions(),
             #[cfg(feature = "tiff")]
             Handler::Tiff(h) => h.extensions(),
             #[cfg(feature = "webp")]
@@ -179,6 +191,8 @@ impl HandlerRegistry {
         self.register(Handler::Pdf(crate::files::formats::pdf::PdfHandler));
         #[cfg(feature = "png")]
         self.register(Handler::Png(crate::files::formats::png::PngHandler));
+        #[cfg(feature = "psd")]
+        self.register(Handler::Psd(crate::files::formats::psd::PsdHandler));
         #[cfg(feature = "tiff")]
         self.register(Handler::Tiff(crate::files::formats::tiff::TiffHandler));
         #[cfg(feature = "webp")]
@@ -301,6 +315,12 @@ mod tests {
 
         #[cfg(feature = "webp")]
         assert!(registry.find_by_extension("webp").is_some());
+
+        #[cfg(feature = "psd")]
+        {
+            assert!(registry.find_by_extension("psd").is_some());
+            assert!(registry.find_by_extension("psb").is_some());
+        }
 
         // Unknown extension
         assert!(registry.find_by_extension("unknown").is_none());
@@ -438,6 +458,30 @@ mod tests {
         let handler = registry.find_by_detection(&mut reader).unwrap();
         assert!(handler.is_some());
         assert_eq!(handler.unwrap().format_name(), "WebP");
+    }
+
+    #[cfg(feature = "psd")]
+    #[test]
+    fn test_find_by_detection_psd() {
+        let registry = HandlerRegistry::new();
+        // PSD signature: 8BPS + version 1 + enough data to be valid
+        let mut psd_data = vec![
+            0x38, 0x42, 0x50, 0x53, // "8BPS"
+            0x00, 0x01, // version 1
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // reserved
+            0x00, 0x03, // channels
+            0x00, 0x00, 0x00, 0x64, // height = 100
+            0x00, 0x00, 0x00, 0x64, // width = 100
+            0x00, 0x08, // depth = 8
+            0x00, 0x03, // color mode = RGB
+            0x00, 0x00, 0x00, 0x00, // color mode data length
+            0x00, 0x00, 0x00, 0x00, // image resources length
+        ];
+        psd_data.resize(40, 0); // Ensure minimum size
+        let mut reader = Cursor::new(psd_data);
+        let handler = registry.find_by_detection(&mut reader).unwrap();
+        assert!(handler.is_some());
+        assert_eq!(handler.unwrap().format_name(), "PSD");
     }
 
     #[test]

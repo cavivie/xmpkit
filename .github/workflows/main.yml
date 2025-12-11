@@ -137,5 +137,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
-      - name: Run example
-        run: cargo run --example read_xmp tests/fixtures/data/image2.jpg
+      - name: Run examples
+        run: |
+          cargo run --example read_xmp tests/fixtures/data/image2.jpg
+          cargo run --example read_xmp "tests/fixtures/data/Purple Square.psd"
