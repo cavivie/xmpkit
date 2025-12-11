@@ -154,7 +154,7 @@ impl FileHandler for PsdHandler {
             let name_len = read_u8(reader)? as u64;
             // Name is padded to make total (length byte + chars) even
             // So we skip: name_len bytes + padding to make (1 + name_len) even
-            let name_padded_len = if (1 + name_len) % 2 == 0 {
+            let name_padded_len = if (1 + name_len).is_multiple_of(2) {
                 name_len
             } else {
                 name_len + 1
@@ -180,7 +180,7 @@ impl FileHandler for PsdHandler {
             }
 
             // Skip to next resource (data is padded to even)
-            let data_padded_len = if data_len % 2 == 0 {
+            let data_padded_len = if data_len.is_multiple_of(2) {
                 data_len
             } else {
                 data_len + 1
@@ -254,7 +254,7 @@ impl FileHandler for PsdHandler {
 
                 // Read Pascal string name
                 let name_len = read_u8(reader)?;
-                let name_padded_len = if (1 + name_len as u64) % 2 == 0 {
+                let name_padded_len = if (1 + name_len as u64).is_multiple_of(2) {
                     name_len as u64
                 } else {
                     name_len as u64 + 1
@@ -268,7 +268,7 @@ impl FileHandler for PsdHandler {
 
                 // Read data length
                 let data_len = read_u32_be(reader)?;
-                let data_padded_len = if data_len % 2 == 0 {
+                let data_padded_len = if data_len.is_multiple_of(2) {
                     data_len
                 } else {
                     data_len + 1
@@ -348,7 +348,7 @@ fn write_xmp_resource(buffer: &mut Vec<u8>, xmp_data: &[u8]) -> XmpResult<()> {
     buffer.extend_from_slice(xmp_data);
 
     // Pad to even if needed
-    if xmp_data.len() % 2 != 0 {
+    if !xmp_data.len().is_multiple_of(2) {
         buffer.push(0);
     }
 
@@ -461,7 +461,7 @@ mod tests {
 
         // Build XMP image resource
         let xmp_bytes = xmp.as_bytes();
-        let xmp_padded_len = if xmp_bytes.len() % 2 == 0 {
+        let xmp_padded_len = if xmp_bytes.len().is_multiple_of(2) {
             xmp_bytes.len()
         } else {
             xmp_bytes.len() + 1
@@ -478,7 +478,7 @@ mod tests {
         data.push(0); // padding
         data.extend_from_slice(&(xmp_bytes.len() as u32).to_be_bytes());
         data.extend_from_slice(xmp_bytes);
-        if xmp_bytes.len() % 2 != 0 {
+        if !xmp_bytes.len().is_multiple_of(2) {
             data.push(0);
         }
 
