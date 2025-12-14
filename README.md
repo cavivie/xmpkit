@@ -101,18 +101,20 @@ For WebAssembly/JavaScript integration, see [WEBASSEMBLY.md](docs/WEBASSEMBLY.md
 
 | Format | Extensions | Read XMP | Write XMP | Status |
 |--------|-----------|----------|-----------|--------|
-| AVI | .avi | Yes | Yes | Fully supported |
-| GIF | .gif | Yes | Yes | Fully supported |
 | JPEG | .jpg, .jpeg | Yes | Yes | Fully supported |
-| MP3 | .mp3 | Yes | Yes | Fully supported |
-| MPEG4 | .mp4, .m4a, .m4v, .mov | Yes | Yes | Fully supported |
-| PDF | .pdf | Yes | Yes | Fully supported |
 | PNG | .png | Yes | Yes | Fully supported |
-| PSD | .psd, .psb | Yes | Yes | Fully supported |
+| GIF | .gif | Yes | Yes | Fully supported |
+| WebP | .webp | Yes | Yes | Fully supported |
 | SVG | .svg | Yes | Yes | Fully supported |
 | TIFF | .tif, .tiff | Yes | Yes | Fully supported |
+| HEIF | .heif, .heic, .avif | Yes | Yes | Fully supported |
+| MP3 | .mp3 | Yes | Yes | Fully supported |
 | WAV | .wav | Yes | Yes | Fully supported |
-| WebP | .webp | Yes | Yes | Fully supported |
+| AVI | .avi | Yes | Yes | Fully supported |
+| MP4 | .mp4, .m4a, .m4v | Yes | Yes | Fully supported |
+| MOV | .mov | Yes | Yes | Fully supported |
+| PDF | .pdf | Yes | Yes | Fully supported |
+| PSD | .psd, .psb | Yes | Yes | Fully supported |
 
 ### Platform Support
 

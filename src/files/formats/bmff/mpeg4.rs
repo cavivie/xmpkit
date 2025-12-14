@@ -10,22 +10,16 @@
 
 use crate::core::error::{XmpError, XmpResult};
 use crate::core::metadata::XmpMeta;
+use crate::files::formats::bmff::{
+    copy_bytes, read_box, read_box_data, skip_box, BmffBox, FTYP_BOX, UUID_BOX, XMP_UUID,
+};
 use crate::files::handler::{FileHandler, XmpOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 
-/// MP4 file signature (ftyp box)
-const MP4_SIGNATURE: &[u8] = b"ftyp";
+// FTYP_BOX, UUID_BOX, and XMP_UUID are imported from bmff module
 
-/// XMP UUID for MP4 files
-/// UUID: BE7ACFCB-97A9-42E8-9C71-999491E3AFAC (from ISOBaseMedia_Support.hpp k_xmpUUID)
-const XMP_UUID: &[u8] = &[
-    0xBE, 0x7A, 0xCF, 0xCB, 0x97, 0xA9, 0x42, 0xE8, 0x9C, 0x71, 0x99, 0x94, 0x91, 0xE3, 0xAF, 0xAC,
-];
-
-/// Box type for user data
+/// Box type for user data (MPEG-4/QuickTime specific)
 const BOX_TYPE_UDTA: &[u8] = b"udta";
-/// Box type for UUID
-const BOX_TYPE_UUID: &[u8] = b"uuid";
 
 /// MP4 file handler for XMP metadata
 #[derive(Debug, Clone, Copy)]
@@ -64,7 +58,7 @@ impl FileHandler for Mpeg4Handler {
         }
 
         // Check for 'ftyp' box (ISO Base Media File Format)
-        if box_type == MP4_SIGNATURE {
+        if box_type == FTYP_BOX {
             return Ok(true);
         }
 
@@ -105,14 +99,6 @@ impl FileHandler for Mpeg4Handler {
     fn extensions(&self) -> &'static [&'static str] {
         &["mp4", "m4a", "m4v", "mov"]
     }
-}
-
-#[derive(Debug)]
-struct Mpeg4Box {
-    size: u64,
-    box_type: [u8; 4],
-    #[allow(dead_code)]
-    data_offset: u64,
 }
 
 /// Box layout information for optimize-file-layout mode (matches Adobe C++ LayoutInfo)
@@ -189,16 +175,16 @@ impl Mpeg4Handler {
         reader.seek(SeekFrom::Start(0))?;
 
         // Read ftyp box
-        let ftyp_box = Self::read_box(reader)?;
-        if ftyp_box.box_type != *MP4_SIGNATURE {
+        let ftyp_box = read_box(reader)?;
+        if ftyp_box.box_type != *FTYP_BOX {
             return Ok(None);
         }
-        reader.seek(SeekFrom::Start(ftyp_box.size))?;
+        skip_box(reader, &ftyp_box)?;
 
         // Search for moov box
         loop {
             let box_start = reader.stream_position()?;
-            let box_info = match Self::read_box(reader) {
+            let box_info = match read_box(reader) {
                 Ok(b) => b,
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
                 Err(e) => return Err(e.into()),
@@ -209,7 +195,7 @@ impl Mpeg4Handler {
                 let moov_end = box_start + box_info.size;
                 while reader.stream_position()? < moov_end {
                     let child_start = reader.stream_position()?;
-                    let child_info = match Self::read_box(reader) {
+                    let child_info = match read_box(reader) {
                         Ok(b) => b,
                         Err(_) => break,
                     };
@@ -217,33 +203,32 @@ impl Mpeg4Handler {
                     if child_info.box_type == *BOX_TYPE_UDTA {
                         return Ok(Some((child_start, child_info.size)));
                     }
-                    reader.seek(SeekFrom::Start(child_start + child_info.size))?;
+                    skip_box(reader, &child_info)?;
                 }
                 return Ok(None);
             }
 
             // Skip to next box
-            reader.seek(SeekFrom::Start(box_start + box_info.size))?;
+            skip_box(reader, &box_info)?;
         }
     }
 
     /// Internal implementation of read_xmp without reconciliation
     fn read_xmp_internal<R: Read + Seek>(reader: &mut R) -> XmpResult<Option<XmpMeta>> {
         // Read ftyp box (first box in MP4 file)
-        let ftyp_box = Self::read_box(reader)?;
-        if ftyp_box.box_type != *MP4_SIGNATURE {
+        let ftyp_box = read_box(reader)?;
+        if ftyp_box.box_type != *FTYP_BOX {
             return Err(XmpError::BadValue("Not a valid MP4 file".to_string()));
         }
 
-        // Skip ftyp box data (size includes header, so skip size - 8 bytes for header)
-        let ftyp_data_size = ftyp_box.size - 8;
-        reader.seek(SeekFrom::Current(ftyp_data_size as i64))?;
+        // Skip ftyp box
+        skip_box(reader, &ftyp_box)?;
 
         // Search for top-level uuid box with XMP UUID first (ISO Base Media format)
         // Then search for moov/udta/XMP_ box (QuickTime format)
         loop {
             let box_start = reader.stream_position()?;
-            let box_info = match Self::read_box(reader) {
+            let box_info = match read_box(reader) {
                 Ok(b) => b,
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     return Ok(None);
@@ -252,7 +237,7 @@ impl Mpeg4Handler {
             };
 
             // Check for top-level XMP UUID box (ISO Base Media format)
-            if box_info.box_type == *BOX_TYPE_UUID {
+            if box_info.box_type == *UUID_BOX {
                 if let Some(xmp) = Self::read_xmp_from_uuid_box(reader, &box_info)? {
                     return Ok(Some(xmp));
                 }
@@ -264,8 +249,7 @@ impl Mpeg4Handler {
                 }
             } else {
                 // Skip other boxes
-                let remaining = box_info.size - 8;
-                reader.seek(SeekFrom::Current(remaining as i64))?;
+                skip_box(reader, &box_info)?;
             }
         }
     }
@@ -279,7 +263,7 @@ impl Mpeg4Handler {
 
         while reader.stream_position()? < parent_end {
             let box_start = reader.stream_position()?;
-            let box_info = match Self::read_box(reader) {
+            let box_info = match read_box(reader) {
                 Ok(b) => b,
                 Err(_) => break,
             };
@@ -303,7 +287,7 @@ impl Mpeg4Handler {
                 }
             } else {
                 // Skip this box
-                reader.seek(SeekFrom::Start(box_start + box_info.size))?;
+                skip_box(reader, &box_info)?;
             }
         }
 
@@ -320,7 +304,7 @@ impl Mpeg4Handler {
 
         while reader.stream_position()? < parent_end {
             let box_start = reader.stream_position()?;
-            let box_info = match Self::read_box(reader) {
+            let box_info = match read_box(reader) {
                 Ok(b) => b,
                 Err(_) => break,
             };
@@ -337,7 +321,7 @@ impl Mpeg4Handler {
                 }
             } else {
                 // Skip this box
-                reader.seek(SeekFrom::Start(box_start + box_info.size))?;
+                skip_box(reader, &box_info)?;
             }
         }
 
@@ -353,19 +337,18 @@ impl Mpeg4Handler {
         let start_pos = reader.stream_position()?;
 
         while reader.stream_position()? < parent_end {
-            let box_start = reader.stream_position()?;
-            let box_info = match Self::read_box(reader) {
+            let box_info = match read_box(reader) {
                 Ok(b) => b,
                 Err(_) => break,
             };
 
-            if box_info.box_type == *BOX_TYPE_UUID {
+            if box_info.box_type == *UUID_BOX {
                 if let Some(xmp) = Self::read_xmp_from_uuid_box(reader, &box_info)? {
                     return Ok(Some(xmp));
                 }
             } else {
                 // Skip this box
-                reader.seek(SeekFrom::Start(box_start + box_info.size))?;
+                skip_box(reader, &box_info)?;
             }
         }
 
@@ -376,56 +359,21 @@ impl Mpeg4Handler {
     /// Read XMP from UUID box if it matches XMP UUID
     fn read_xmp_from_uuid_box<R: Read + Seek>(
         reader: &mut R,
-        box_info: &Mpeg4Box,
+        box_info: &BmffBox,
     ) -> XmpResult<Option<XmpMeta>> {
-        // Read UUID (16 bytes)
-        let mut uuid = [0u8; 16];
-        reader.read_exact(&mut uuid)?;
-
-        if uuid != *XMP_UUID {
-            // Skip this UUID box
-            let remaining = box_info.size - 8 - 16;
-            reader.seek(SeekFrom::Current(remaining as i64))?;
+        // Read entire box payload
+        let payload = read_box_data(reader, box_info)?;
+        if payload.len() < 16 {
             return Ok(None);
         }
 
-        // Found XMP UUID box
-        let xmp_data_size = box_info.size - 8 - 16; // size - box header - UUID
-        let mut xmp_data = vec![0u8; xmp_data_size as usize];
-        reader.read_exact(&mut xmp_data)?;
+        if &payload[0..16] != XMP_UUID {
+            return Ok(None);
+        }
 
-        let xmp_str = String::from_utf8(xmp_data)
+        let xmp_str = String::from_utf8(payload[16..].to_vec())
             .map_err(|e| XmpError::ParseError(format!("Invalid UTF-8: {}", e)))?;
         Ok(Some(XmpMeta::parse(&xmp_str)?))
-    }
-
-    /// Read an MP4 box header
-    fn read_box<R: Read + Seek>(reader: &mut R) -> std::io::Result<Mpeg4Box> {
-        let data_offset = reader.stream_position()?;
-
-        // Read box size (4 bytes, big-endian)
-        let mut size_bytes = [0u8; 4];
-        reader.read_exact(&mut size_bytes)?;
-        let size = u32::from_be_bytes(size_bytes) as u64;
-
-        // Read box type (4 bytes)
-        let mut box_type = [0u8; 4];
-        reader.read_exact(&mut box_type)?;
-
-        // Handle extended size (size == 1 means extended size follows)
-        let actual_size = if size == 1 {
-            let mut ext_size_bytes = [0u8; 8];
-            reader.read_exact(&mut ext_size_bytes)?;
-            u64::from_be_bytes(ext_size_bytes)
-        } else {
-            size
-        };
-
-        Ok(Mpeg4Box {
-            size: actual_size,
-            box_type,
-            data_offset,
-        })
     }
 
     /// Scan all top-level boxes and build layout map (matches Adobe C++ OptimizeFileLayout)
@@ -449,7 +397,7 @@ impl Mpeg4Handler {
         let mut curr_pos = 0u64;
         while curr_pos < file_size {
             reader.seek(SeekFrom::Start(curr_pos))?;
-            let box_info = match Self::read_box(reader) {
+            let box_info = match read_box(reader) {
                 Ok(b) => b,
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
                 Err(e) => return Err(e.into()),
@@ -481,7 +429,7 @@ impl Mpeg4Handler {
                 if xmp_found {
                     break;
                 }
-            } else if box_info.box_type == *BOX_TYPE_UUID {
+            } else if box_info.box_type == *UUID_BOX {
                 // Check if this is XMP UUID box
                 let uuid_pos = reader.stream_position()?;
                 let mut uuid = [0u8; 16];
@@ -630,7 +578,7 @@ impl Mpeg4Handler {
             if box_info.box_type == *b"mdat" {
                 continue;
             }
-            if box_info.box_type == *MP4_SIGNATURE {
+            if box_info.box_type == *FTYP_BOX {
                 // Skip ftyp - already written at the beginning
                 continue;
             }
@@ -751,23 +699,19 @@ impl Mpeg4Handler {
             if box_info.box_type == *b"mdat" {
                 continue;
             }
-            if box_info.box_type == *MP4_SIGNATURE {
+            if box_info.box_type == *FTYP_BOX {
                 // Skip ftyp - already written at the beginning
                 continue;
             }
             reader.seek(SeekFrom::Start(box_info.old_offset))?;
-            let mut box_data = vec![0u8; box_info.box_size as usize];
-            reader.read_exact(&mut box_data)?;
-            writer.write_all(&box_data)?;
+            copy_bytes(&mut reader, &mut writer, box_info.box_size)?;
         }
 
         // 5. All mdat boxes
         for box_info in &boxes {
             if box_info.box_type == *b"mdat" {
                 reader.seek(SeekFrom::Start(box_info.old_offset))?;
-                let mut box_data = vec![0u8; box_info.box_size as usize];
-                reader.read_exact(&mut box_data)?;
-                writer.write_all(&box_data)?;
+                copy_bytes(&mut reader, &mut writer, box_info.box_size)?;
             }
         }
 
@@ -803,8 +747,8 @@ impl Mpeg4Handler {
         let xmp_bytes = xmp_packet.as_bytes();
 
         // Read ftyp box
-        let ftyp_box = Self::read_box(&mut reader)?;
-        if ftyp_box.box_type != *MP4_SIGNATURE {
+        let ftyp_box = read_box(&mut reader)?;
+        if ftyp_box.box_type != *FTYP_BOX {
             return Err(XmpError::BadValue("Not a valid MP4 file".to_string()));
         }
 
@@ -830,9 +774,7 @@ impl Mpeg4Handler {
 
         // Copy ftyp box
         reader.seek(SeekFrom::Start(0))?;
-        let mut ftyp_data = vec![0u8; ftyp_box.size as usize];
-        reader.read_exact(&mut ftyp_data)?;
-        writer.write_all(&ftyp_data)?;
+        copy_bytes(&mut reader, &mut writer, ftyp_box.size)?;
 
         // For optimize-file-layout mode, use complete rewrite approach (matches Adobe C++ OptimizeFileLayout)
         #[cfg(feature = "optimize-file-layout")]
@@ -847,7 +789,7 @@ impl Mpeg4Handler {
         // Process boxes
         loop {
             let box_start = reader.stream_position()?;
-            let box_info = match Self::read_box(&mut reader) {
+            let box_info = match read_box(&mut reader) {
                 Ok(b) => b,
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
                 Err(e) => return Err(e.into()),
@@ -965,8 +907,8 @@ impl Mpeg4Handler {
                 }
 
                 // Reader is already at box_start from above, now seek past the box
-                reader.seek(SeekFrom::Start(box_start + box_info.size))?;
-            } else if box_info.box_type == *BOX_TYPE_UUID && is_iso_base_media {
+                skip_box(&mut reader, &box_info)?;
+            } else if box_info.box_type == *UUID_BOX && is_iso_base_media {
                 // Check if this is an existing top-level XMP UUID box
                 reader.seek(SeekFrom::Start(box_start + 8))?; // Skip box header
                 let mut uuid = [0u8; 16];
@@ -974,17 +916,14 @@ impl Mpeg4Handler {
 
                 if uuid == *XMP_UUID {
                     // Skip old XMP UUID box
-                    let remaining = box_info.size - 8 - 16;
-                    reader.seek(SeekFrom::Current(remaining as i64))?;
+                    skip_box(&mut reader, &box_info)?;
 
                     // Record position for writing new UUID box later
                     xmp_box_pos = Some(writer.stream_position()?);
                 } else {
                     // Copy other UUID boxes
                     reader.seek(SeekFrom::Start(box_start))?;
-                    let mut box_data = vec![0u8; box_info.size as usize];
-                    reader.read_exact(&mut box_data)?;
-                    writer.write_all(&box_data)?;
+                    copy_bytes(&mut reader, &mut writer, box_info.size)?;
                 }
             } else {
                 #[cfg(feature = "optimize-file-layout")]
@@ -997,13 +936,11 @@ impl Mpeg4Handler {
                     {
                         // Skip these boxes - they will be removed in optimized layout
                         // Reader is already at box_start from above
-                        reader.seek(SeekFrom::Start(box_start + box_info.size))?;
+                        skip_box(&mut reader, &box_info)?;
                     } else {
                         // Copy other boxes as-is
                         reader.seek(SeekFrom::Start(box_start))?;
-                        let mut box_data = vec![0u8; box_info.size as usize];
-                        reader.read_exact(&mut box_data)?;
-                        writer.write_all(&box_data)?;
+                        copy_bytes(&mut reader, &mut writer, box_info.size)?;
                     }
                 }
 
@@ -1011,9 +948,7 @@ impl Mpeg4Handler {
                 {
                     // Copy other boxes as-is
                     // Reader is already at box_start from above
-                    let mut box_data = vec![0u8; box_info.size as usize];
-                    reader.read_exact(&mut box_data)?;
-                    writer.write_all(&box_data)?;
+                    copy_bytes(&mut reader, &mut writer, box_info.size)?;
                 }
             }
         }
@@ -1075,7 +1010,7 @@ impl Mpeg4Handler {
     ) -> XmpResult<()> {
         while reader.stream_position()? < moov_end {
             let box_start = reader.stream_position()?;
-            let box_info = match Self::read_box(reader) {
+            let box_info = match read_box(reader) {
                 Ok(b) => b,
                 Err(_) => break,
             };
@@ -1108,9 +1043,7 @@ impl Mpeg4Handler {
                     let udta_content_start = box_start + header_size;
                     let udta_content_size = box_info.size - header_size;
                     reader.seek(SeekFrom::Start(udta_content_start))?;
-                    let mut content_data = vec![0u8; udta_content_size as usize];
-                    reader.read_exact(&mut content_data)?;
-                    writer.write_all(&content_data)?;
+                    copy_bytes(reader, writer, udta_content_size)?;
                 }
 
                 // Update udta box size
@@ -1129,9 +1062,7 @@ impl Mpeg4Handler {
             } else {
                 // Copy other moov children
                 reader.seek(SeekFrom::Start(box_start))?;
-                let mut box_data = vec![0u8; box_info.size as usize];
-                reader.read_exact(&mut box_data)?;
-                writer.write_all(&box_data)?;
+                copy_bytes(reader, writer, box_info.size)?;
             }
         }
 
@@ -1148,20 +1079,19 @@ impl Mpeg4Handler {
     ) -> XmpResult<()> {
         while reader.stream_position()? < udta_end {
             let box_start = reader.stream_position()?;
-            let box_info = match Self::read_box(reader) {
+            let box_info = match read_box(reader) {
                 Ok(b) => b,
                 Err(_) => break,
             };
 
-            if box_info.box_type == *BOX_TYPE_UUID {
+            if box_info.box_type == *UUID_BOX {
                 // Check if it's XMP UUID
                 let mut uuid = [0u8; 16];
                 reader.read_exact(&mut uuid)?;
 
                 if uuid == *XMP_UUID {
                     // Skip old XMP UUID box
-                    let remaining = box_info.size - 8 - 16;
-                    reader.seek(SeekFrom::Current(remaining as i64))?;
+                    skip_box(reader, &box_info)?;
 
                     // Write new XMP UUID box
                     if !*xmp_written {
@@ -1171,16 +1101,12 @@ impl Mpeg4Handler {
                 } else {
                     // Copy other UUID boxes
                     reader.seek(SeekFrom::Start(box_start))?;
-                    let mut box_data = vec![0u8; box_info.size as usize];
-                    reader.read_exact(&mut box_data)?;
-                    writer.write_all(&box_data)?;
+                    copy_bytes(reader, writer, box_info.size)?;
                 }
             } else {
                 // Copy other udta children
                 reader.seek(SeekFrom::Start(box_start))?;
-                let mut box_data = vec![0u8; box_info.size as usize];
-                reader.read_exact(&mut box_data)?;
-                writer.write_all(&box_data)?;
+                copy_bytes(reader, writer, box_info.size)?;
             }
         }
 
@@ -1208,7 +1134,7 @@ impl Mpeg4Handler {
         }
 
         // Write box type (uuid)
-        writer.write_all(BOX_TYPE_UUID)?;
+        writer.write_all(UUID_BOX)?;
 
         // Write UUID
         writer.write_all(XMP_UUID)?;
@@ -1706,6 +1632,9 @@ mod native_reconcile {
     pub const BOX_GEN: &[u8; 4] = b"\xa9gen"; // Genre (©gen)
     pub const BOX_CPRT: &[u8; 4] = b"cprt"; // Copyright (ISO base media)
     pub const BOX_CPY: &[u8; 4] = b"\xa9cpy"; // Copyright (©cpy, QuickTime)
+    pub const BOX_TOO: &[u8; 4] = b"\xa9too"; // Encoder tool
+    pub const BOX_DES: &[u8; 4] = b"desc"; // Description
+    pub const BOX_LDES: &[u8; 4] = b"ldes"; // Long description
 
     /// Native metadata item
     #[derive(Debug, Clone)]
@@ -1715,7 +1644,7 @@ mod native_reconcile {
         pub value: String,
     }
 
-    /// Read QuickTime native metadata from udta box
+    /// Read QuickTime native metadata from udta box (legacy QT text or meta/ilst)
     pub fn read_native_metadata<R: Read + Seek>(
         reader: &mut R,
         udta_end: u64,
@@ -1724,21 +1653,21 @@ mod native_reconcile {
         let start_pos = reader.stream_position()?;
 
         while reader.stream_position()? < udta_end {
-            let box_start = reader.stream_position()?;
-            let box_info = match Mpeg4Handler::read_box(reader) {
+            let box_info = match read_box(reader) {
                 Ok(b) => b,
                 Err(_) => break,
             };
 
-            // Check for known native metadata boxes
-            if is_native_metadata_box(&box_info.box_type) {
-                if let Some(item) = read_native_item(reader, &box_info)? {
+            if box_info.box_type == *b"meta" {
+                read_native_from_meta(reader, &box_info, &mut items)?;
+            } else if is_native_metadata_box(&box_info.box_type) {
+                if let Some(item) = read_qt_text_item(reader, &box_info)? {
                     items.push(item);
                 }
             }
 
             // Move to next box
-            reader.seek(SeekFrom::Start(box_start + box_info.size))?;
+            skip_box(reader, &box_info)?;
         }
 
         reader.seek(SeekFrom::Start(start_pos))?;
@@ -1755,11 +1684,14 @@ mod native_reconcile {
             || box_type == BOX_GEN
             || box_type == BOX_CPRT
             || box_type == BOX_CPY
+            || box_type == BOX_TOO
+            || box_type == BOX_DES
+            || box_type == BOX_LDES
     }
 
-    fn read_native_item<R: Read + Seek>(
+    fn read_qt_text_item<R: Read + Seek>(
         reader: &mut R,
-        box_info: &Mpeg4Box,
+        box_info: &BmffBox,
     ) -> XmpResult<Option<NativeMetadataItem>> {
         // QuickTime text item format:
         // - 2 bytes: text length
@@ -1794,6 +1726,119 @@ mod native_reconcile {
             language: language.map(|s| s.to_string()),
             value,
         }))
+    }
+
+    /// Parse meta/ilst iTunes-style native metadata within a 'meta' box
+    fn read_native_from_meta<R: Read + Seek>(
+        reader: &mut R,
+        meta_box: &BmffBox,
+        items: &mut Vec<NativeMetadataItem>,
+    ) -> XmpResult<()> {
+        let meta_end = meta_box.header_offset + meta_box.size;
+        // meta box starts with 4 bytes version/flags
+        let mut cursor = meta_box.data_offset;
+        reader.seek(SeekFrom::Start(cursor))?;
+        let mut vf = [0u8; 4];
+        reader.read_exact(&mut vf)?;
+        cursor += 4;
+
+        while cursor < meta_end {
+            reader.seek(SeekFrom::Start(cursor))?;
+            let child = match read_box(reader) {
+                Ok(b) => b,
+                Err(_) => break,
+            };
+            if child.box_type == *b"ilst" {
+                read_ilst(reader, &child, items)?;
+            }
+            cursor = child.header_offset + child.size;
+        }
+
+        Ok(())
+    }
+
+    fn read_ilst<R: Read + Seek>(
+        reader: &mut R,
+        ilst_box: &BmffBox,
+        items: &mut Vec<NativeMetadataItem>,
+    ) -> XmpResult<()> {
+        let ilst_end = ilst_box.header_offset + ilst_box.size;
+        let mut cursor = ilst_box.data_offset;
+        while cursor < ilst_end {
+            reader.seek(SeekFrom::Start(cursor))?;
+            let entry = match read_box(reader) {
+                Ok(b) => b,
+                Err(_) => break,
+            };
+            if is_native_metadata_box(&entry.box_type) {
+                if let Some(item) = read_ilst_item(reader, &entry)? {
+                    items.push(item);
+                }
+            }
+            cursor = entry.header_offset + entry.size;
+        }
+        Ok(())
+    }
+
+    fn read_ilst_item<R: Read + Seek>(
+        reader: &mut R,
+        entry_box: &BmffBox,
+    ) -> XmpResult<Option<NativeMetadataItem>> {
+        let entry_end = entry_box.header_offset + entry_box.size;
+        let mut cursor = entry_box.data_offset;
+        while cursor < entry_end {
+            reader.seek(SeekFrom::Start(cursor))?;
+            let child = match read_box(reader) {
+                Ok(b) => b,
+                Err(_) => break,
+            };
+            if child.box_type == *b"data" {
+                if let Some((lang, val)) = read_data_box(reader, &child)? {
+                    return Ok(Some(NativeMetadataItem {
+                        box_type: entry_box.box_type,
+                        language: lang,
+                        value: val,
+                    }));
+                }
+            }
+            cursor = child.header_offset + child.size;
+        }
+        Ok(None)
+    }
+
+    fn read_data_box<R: Read + Seek>(
+        reader: &mut R,
+        data_box: &BmffBox,
+    ) -> XmpResult<Option<(Option<String>, String)>> {
+        // data box payload: 4 bytes type, 4 bytes locale, then value
+        let payload_size = data_box.size - data_box.header_size();
+        if payload_size < 8 {
+            return Ok(None);
+        }
+        reader.seek(SeekFrom::Start(data_box.data_offset))?;
+        let mut header = [0u8; 8];
+        reader.read_exact(&mut header)?;
+        let data_type = u32::from_be_bytes([header[0], header[1], header[2], header[3]]);
+        let _locale = u32::from_be_bytes([header[4], header[5], header[6], header[7]]);
+        let value_len = payload_size as usize - 8;
+        let mut buf = vec![0u8; value_len];
+        reader.read_exact(&mut buf)?;
+
+        let val = match data_type {
+            1 | 0 => String::from_utf8_lossy(&buf).to_string(),
+            2 => {
+                let mut u16s = Vec::with_capacity(buf.len() / 2);
+                for chunk in buf.chunks(2) {
+                    if chunk.len() == 2 {
+                        u16s.push(u16::from_be_bytes([chunk[0], chunk[1]]));
+                    }
+                }
+                String::from_utf16_lossy(&u16s)
+            }
+            _ => String::from_utf8_lossy(&buf).to_string(),
+        };
+
+        Ok(Some((None, val)))
     }
 
     /// Reconcile native metadata into XMP
@@ -1865,6 +1910,23 @@ mod native_reconcile {
                         let _ = meta.set_localized_text(ns::DC, "rights", lang, lang, &item.value);
                     }
                 }
+                b if b == BOX_TOO => {
+                    // ©too -> xmp:CreatorTool
+                    if meta.get_property(ns::XMP, "CreatorTool").is_none() {
+                        let _ =
+                            meta.set_property(ns::XMP, "CreatorTool", item.value.clone().into());
+                    }
+                }
+                b if b == BOX_DES || b == BOX_LDES => {
+                    // desc/ldes -> dc:description
+                    if meta
+                        .get_localized_text(ns::DC, "description", lang, lang)
+                        .is_none()
+                    {
+                        let _ =
+                            meta.set_localized_text(ns::DC, "description", lang, lang, &item.value);
+                    }
+                }
                 _ => {}
             }
         }
@@ -1884,7 +1946,7 @@ mod tests {
         let mut mp4 = Vec::new();
         // ftyp box: size (20), type ("ftyp"), major brand ("isom"), minor version (0), compatible brands ("isom")
         mp4.extend_from_slice(&20u32.to_be_bytes()); // box size
-        mp4.extend_from_slice(MP4_SIGNATURE); // "ftyp"
+        mp4.extend_from_slice(FTYP_BOX); // "ftyp"
         mp4.extend_from_slice(b"isom"); // major brand
         mp4.extend_from_slice(&0u32.to_be_bytes()); // minor version
         mp4.extend_from_slice(b"isom"); // compatible brand
@@ -1944,6 +2006,7 @@ mod reconcile_tests {
     use super::native_reconcile::*;
     use crate::core::metadata::XmpMeta;
     use crate::core::namespace::ns;
+    use std::io::{Seek, SeekFrom};
 
     #[test]
     fn test_lookup_2letter_lang() {
@@ -2053,5 +2116,54 @@ mod reconcile_tests {
         // Check rights
         let rights = meta.get_localized_text(ns::DC, "rights", "en", "en");
         assert_eq!(rights.unwrap().0, "© 2024 Example");
+    }
+
+    #[test]
+    fn test_read_native_metadata_ilst_title() {
+        let title = "Hello";
+        // data box
+        let data_size = 8 + 4 + 4 + title.len() as u32; // header + type + locale + payload
+        let mut data = Vec::new();
+        data.extend_from_slice(&data_size.to_be_bytes());
+        data.extend_from_slice(b"data");
+        data.extend_from_slice(&1u32.to_be_bytes()); // type UTF-8
+        data.extend_from_slice(&0u32.to_be_bytes()); // locale
+        data.extend_from_slice(title.as_bytes());
+
+        // item ©nam
+        let item_size = 8 + data.len() as u32;
+        let mut item = Vec::new();
+        item.extend_from_slice(&item_size.to_be_bytes());
+        item.extend_from_slice(BOX_NAM);
+        item.extend_from_slice(&data);
+
+        // ilst
+        let ilst_size = 8 + item.len() as u32;
+        let mut ilst = Vec::new();
+        ilst.extend_from_slice(&ilst_size.to_be_bytes());
+        ilst.extend_from_slice(b"ilst");
+        ilst.extend_from_slice(&item);
+
+        // meta (version/flags + ilst)
+        let meta_size = 8 + 4 + ilst.len() as u32;
+        let mut meta = Vec::new();
+        meta.extend_from_slice(&meta_size.to_be_bytes());
+        meta.extend_from_slice(b"meta");
+        meta.extend_from_slice(&0u32.to_be_bytes()); // version/flags
+        meta.extend_from_slice(&ilst);
+
+        // udta wrapper
+        let udta_size = 8 + meta.len() as u32;
+        let mut udta = Vec::new();
+        udta.extend_from_slice(&udta_size.to_be_bytes());
+        udta.extend_from_slice(b"udta");
+        udta.extend_from_slice(&meta);
+
+        let mut cursor = std::io::Cursor::new(udta);
+        cursor.seek(SeekFrom::Start(8)).unwrap(); // position at udta content
+        let items = read_native_metadata(&mut cursor, udta_size as u64).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].box_type, *BOX_NAM);
+        assert_eq!(items[0].value, title);
     }
 }
