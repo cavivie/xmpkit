@@ -64,7 +64,6 @@ files = ["core"]
 gif = ["files"]
 jpeg = ["files"]
 mp3 = ["files"]
-mpeg4 = ["files"]
 pdf = ["files", "lopdf"]
 png = ["files"]
 psd = ["files"]
@@ -74,6 +73,16 @@ tiff = ["files"]
 avi = ["files"]
 wav = ["files"]
 webp = ["files"]
+# BMFF-based formats
+mpeg4 = ["files"]
+mp4 = ["mpeg4"]
+m4a = ["mpeg4"]
+m4v = ["mpeg4"]
+mov = ["mpeg4"]
+mpegh = ["files"]
+heif = ["mpegh"]
+heic = ["mpegh"]
+avif = ["mpegh"]
 
 # Enable file layout optimization
 # Default: optimize-file-layout disabled - uses append mode (e.g., MPEG4: UUID box at end of file)
@@ -86,7 +95,7 @@ optimize-file-layout = []
 mutli-thread = []
 
 # Enable all file format handlers support
-full-formats = ["avi", "gif", "jpeg", "mp3", "mpeg4", "pdf", "png", "psd", "svg", "tiff", "wav", "webp"]
+full-formats = ["avi", "gif", "jpeg", "mp3", "mpeg4", "mpegh", "pdf", "png", "psd", "svg", "tiff", "wav", "webp"]
 
 # WebAssembly JavaScript bindings (optional)
 wasm = ["wasm-bindgen", "js-sys", "serde", "serde_json"]
