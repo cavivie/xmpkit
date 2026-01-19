@@ -35,7 +35,7 @@ thiserror = "2.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
 # files
-lopdf = { version = "0.38", optional = true }
+lopdf = { version = "0.39", optional = true }
 # ohos
 napi-ohos = { version = "1", optional = true }
 napi-derive-ohos = { version = "1", optional = true }
