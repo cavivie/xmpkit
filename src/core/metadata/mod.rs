@@ -27,6 +27,17 @@ pub struct XmpMeta {
     about_uri: Option<String>,
 }
 
+/// A property entry produced by iterating an [`XmpMeta`] instance.
+#[derive(Debug, Clone)]
+pub struct XmpProperty {
+    /// Expanded namespace URI for the property (e.g., "http://ns.adobe.com/xap/1.0/")
+    pub namespace_uri: String,
+    /// Property name (e.g., "CreatorTool", "creator", "Flash")
+    pub name: String,
+    /// Property value
+    pub value: XmpValue,
+}
+
 impl XmpMeta {
     /// Create a new empty XMP metadata object
     pub fn new() -> Self {
@@ -35,6 +46,36 @@ impl XmpMeta {
             namespaces: NamespaceMap::new(),
             about_uri: None,
         }
+    }
+
+    /// Returns all top-level properties in this metadata object.
+    ///
+    /// This method returns an owned iterator (it snapshots the current state), so it can
+    /// be used safely without holding internal borrows/locks across iteration.
+    pub fn all_properties(&self) -> Vec<XmpProperty> {
+        root_read_with(&self.root, |root| {
+            let mut out = Vec::with_capacity(root.fields.len());
+
+            for key in root.fields.keys() {
+                // Keys are stored as "namespace_uri:property_name".
+                let Some(colon_pos) = key.rfind(':') else {
+                    continue;
+                };
+                let namespace_uri = key[..colon_pos].to_string();
+                let name = key[colon_pos + 1..].to_string();
+
+                if let Some(value) = self.get_property(&namespace_uri, &name) {
+                    out.push(XmpProperty {
+                        namespace_uri,
+                        name,
+                        value,
+                    });
+                }
+            }
+            out.sort_by(|a, b| (a.namespace_uri.as_str(), a.name.as_str()).cmp(&(b.namespace_uri.as_str(), b.name.as_str())));
+        
+            out
+        })
     }
 
     /// Resolve namespace URI from namespace parameter (URI or prefix)
