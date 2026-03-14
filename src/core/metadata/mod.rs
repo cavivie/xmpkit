@@ -73,7 +73,7 @@ impl XmpMeta {
                 }
             }
             out.sort_by(|a, b| (a.namespace_uri.as_str(), a.name.as_str()).cmp(&(b.namespace_uri.as_str(), b.name.as_str())));
-        
+
             out
         })
     }
@@ -141,10 +141,11 @@ impl XmpMeta {
     pub fn parse(s: &str) -> XmpResult<Self> {
         let mut parser = XmpParser::new();
         let root_node = parser.parse_packet(s)?;
+        let namespaces = parser.namespace_map();
 
         Ok(Self {
             root: new_root_node(root_node),
-            namespaces: NamespaceMap::new(),
+            namespaces,
             about_uri: None,
         })
     }
@@ -247,14 +248,14 @@ impl XmpMeta {
 
     /// Serialize to RDF/XML string
     pub fn serialize(&self) -> XmpResult<String> {
-        let serializer = XmpSerializer::new();
+        let serializer = XmpSerializer::with_namespaces(self.namespaces.clone());
         let root = root_read!(self.root);
         serializer.serialize_rdf(&root)
     }
 
     /// Serialize to XMP Packet format
     pub fn serialize_packet(&self) -> XmpResult<String> {
-        let serializer = XmpSerializer::new();
+        let serializer = XmpSerializer::with_namespaces(self.namespaces.clone());
         let root = root_read!(self.root);
         serializer.serialize_packet(&root)
     }
@@ -273,7 +274,7 @@ impl XmpMeta {
     /// * `Ok(String)` - The serialized packet with padding
     /// * `Err(XmpError)` - If the serialized packet exceeds target_length
     pub fn serialize_packet_with_padding(&self, target_length: usize) -> XmpResult<String> {
-        let serializer = XmpSerializer::new();
+        let serializer = XmpSerializer::with_namespaces(self.namespaces.clone());
         let root = root_read!(self.root);
         serializer.serialize_packet_with_padding(&root, target_length)
     }
@@ -1114,6 +1115,55 @@ mod tests {
             .unwrap();
         assert_eq!(value2, "English Title");
         assert_eq!(lang2, "en-US");
+    }
+
+    #[test]
+    fn test_parse_preserves_custom_namespaces_for_round_trip() {
+        let xml = r#"<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:lightroom="http://ns.adobe.com/lightroom/1.0/">
+   <xmp:CreatorTool>NIKON Z 7 Ver.03.40</xmp:CreatorTool>
+   <lightroom:hierarchicalSubject>
+    <rdf:Bag>
+     <rdf:li>Thailand</rdf:li>
+     <rdf:li>Thailand|Phuket</rdf:li>
+    </rdf:Bag>
+   </lightroom:hierarchicalSubject>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>"#;
+
+        let mut meta = XmpMeta::parse(xml).unwrap();
+
+        assert_eq!(
+            meta.get_property("xmp", "CreatorTool"),
+            Some(XmpValue::String("NIKON Z 7 Ver.03.40".to_string()))
+        );
+        assert_eq!(
+            meta.get_array_size("lightroom", "hierarchicalSubject"),
+            Some(2)
+        );
+
+        meta.set_property(
+            "xmp",
+            "ModifyDate",
+            XmpValue::DateTime("2024-01-01T00:00:00Z".to_string()),
+        )
+        .unwrap();
+
+        let serialized = meta.serialize_packet().unwrap();
+        assert!(serialized.contains("xmlns:lightroom=\"http://ns.adobe.com/lightroom/1.0/\""));
+        assert!(serialized.contains("<lightroom:hierarchicalSubject>"));
+
+        let reparsed = XmpMeta::parse(&serialized).unwrap();
+        assert_eq!(
+            reparsed.get_property("xmp", "ModifyDate"),
+            Some(XmpValue::String("2024-01-01T00:00:00Z".to_string()))
+        );
     }
 
     #[test]
