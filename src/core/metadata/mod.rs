@@ -72,7 +72,10 @@ impl XmpMeta {
                     });
                 }
             }
-            out.sort_by(|a, b| (a.namespace_uri.as_str(), a.name.as_str()).cmp(&(b.namespace_uri.as_str(), b.name.as_str())));
+            out.sort_by(|a, b| {
+                (a.namespace_uri.as_str(), a.name.as_str())
+                    .cmp(&(b.namespace_uri.as_str(), b.name.as_str()))
+            });
 
             out
         })
