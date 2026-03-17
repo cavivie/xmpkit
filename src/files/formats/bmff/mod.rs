@@ -137,9 +137,28 @@ pub fn read_box<R: Read + Seek>(reader: &mut R) -> std::io::Result<BmffBox> {
         let mut ext_size_bytes = [0u8; 8];
         reader.read_exact(&mut ext_size_bytes)?;
         (u64::from_be_bytes(ext_size_bytes), header_offset + 16)
+    } else if size == 0 {
+        // BMFF size 0 means the box extends to EOF.
+        let current_pos = reader.stream_position()?;
+        let file_end = reader.seek(SeekFrom::End(0))?;
+        reader.seek(SeekFrom::Start(current_pos))?;
+        (file_end.saturating_sub(header_offset), header_offset + 8)
     } else {
         (size, header_offset + 8)
     };
+
+    let header_size = data_offset - header_offset;
+    if actual_size < header_size {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "Invalid BMFF box size {} for {:?}: smaller than header size {}",
+                actual_size,
+                std::str::from_utf8(&box_type).unwrap_or("????"),
+                header_size
+            ),
+        ));
+    }
 
     Ok(BmffBox {
         size: actual_size,
@@ -227,5 +246,43 @@ mod tests {
         assert_eq!(&box_info.box_type, FTYP_BOX);
         assert_eq!(box_info.header_offset, 0);
         assert_eq!(box_info.data_offset, 8);
+    }
+
+    #[test]
+    fn test_read_box_size_zero_extends_to_eof() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&0u32.to_be_bytes());
+        data.extend_from_slice(b"free");
+        data.extend_from_slice(&[1, 2, 3, 4]);
+
+        let mut reader = Cursor::new(data);
+        let box_info = read_box(&mut reader).unwrap();
+        assert_eq!(box_info.size, 12);
+        assert_eq!(&box_info.box_type, b"free");
+        assert_eq!(box_info.header_offset, 0);
+        assert_eq!(box_info.data_offset, 8);
+    }
+
+    #[test]
+    fn test_read_box_rejects_size_smaller_than_header() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&4u32.to_be_bytes());
+        data.extend_from_slice(b"free");
+
+        let mut reader = Cursor::new(data);
+        let err = read_box(&mut reader).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn test_read_box_rejects_extended_size_smaller_than_header() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&1u32.to_be_bytes());
+        data.extend_from_slice(b"free");
+        data.extend_from_slice(&8u64.to_be_bytes());
+
+        let mut reader = Cursor::new(data);
+        let err = read_box(&mut reader).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
 }
