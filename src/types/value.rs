@@ -60,6 +60,23 @@ impl fmt::Display for XmpValue {
     }
 }
 
+#[cfg(feature = "serde")]
+impl serde::ser::Serialize for XmpValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        match self {
+            XmpValue::String(s) => serializer.serialize_str(s),
+            XmpValue::Integer(i) => serializer.serialize_i64(*i),
+            XmpValue::Boolean(b) => serializer.serialize_bool(*b),
+            XmpValue::DateTime(dt) => serializer.serialize_str(dt),
+            XmpValue::Array(arr) => arr.serialize(serializer),
+            XmpValue::Structure(structure) => structure.serialize(serializer),
+        }
+    }
+}
+
 impl From<String> for XmpValue {
     fn from(s: String) -> Self {
         XmpValue::String(s)
