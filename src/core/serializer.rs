@@ -22,6 +22,11 @@ impl XmpSerializer {
         }
     }
 
+    /// Create a serializer with a pre-populated namespace map.
+    pub fn with_namespaces(namespaces: NamespaceMap) -> Self {
+        Self { namespaces }
+    }
+
     /// Serialize a StructureNode to RDF/XML
     pub fn serialize_rdf(&self, root: &StructureNode) -> XmpResult<String> {
         let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 2);
@@ -34,12 +39,15 @@ impl XmpSerializer {
         let mut complex_nodes = Vec::new();
 
         for (key, node) in &root.fields {
+            let parsed_path = self.parse_path_with_namespace(key);
+
+            if let Some((prefix, _, ns_uri)) = &parsed_path {
+                used_namespaces.insert(ns_uri.clone(), prefix.clone());
+            }
+
             if self.should_serialize_as_element(key, node) {
                 complex_nodes.push((key.clone(), node.clone()));
-            } else if let Some((prefix, prop_name, ns_uri)) = self.parse_path_with_namespace(key) {
-                // Record namespace usage
-                used_namespaces.insert(ns_uri.clone(), prefix.clone());
-
+            } else if let Some((prefix, prop_name, _)) = parsed_path {
                 if let Node::Simple(simple) = node {
                     simple_attrs.push((format!("{}:{}", prefix, prop_name), simple.value.clone()));
                 } else {
