@@ -35,6 +35,11 @@ impl XmpParser {
         self.parse_rdf(&packet_content)
     }
 
+    /// Return the namespace map accumulated while parsing.
+    pub fn namespace_map(&self) -> NamespaceMap {
+        self.namespaces.clone()
+    }
+
     /// Extract the XMP Packet content from the `<?xpacket>` wrapper
     fn extract_packet_content(&self, xml: &str) -> XmpResult<String> {
         // Look for <?xpacket start
