@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/cavivie/xmpkit/compare/v0.1.2...v0.1.3) - 2026-03-20
+
+### Added
+
+- enhance XmpMeta serialization with namespace support and add namespace map retrieval in parser
+
+### Fixed
+
+- *(dep)* add wasm_js feature of lopdf(0.37 and higher)
+- *(ci)* add permissions for contents in publish workflow ([#58](https://github.com/cavivie/xmpkit/pull/58))
+
+### Other
+
+- *(deps)* (deps-dev): bump the testing group across 1 directory with 3 updates ([#73](https://github.com/cavivie/xmpkit/pull/73))
+- *(deps)* (deps-dev): bump the build-tools group across 1 directory with 5 updates
+- *(deps)* (deps-dev): bump the linting group across 1 directory with 3 updates
+- *(deps)* (deps): bump the vue-ecosystem group across 1 directory with 2 updates
+- *(deps)* (deps): update lopdf requirement from 0.38 to 0.39
+- *(deps)* (deps): update quick-xml requirement from 0.38 to 0.39
+- *(deps)* (deps): bump element-plus
+- Fix formatting
+- Fix infinite loop when reading invalid MP4 boxes
+- Add serde::Serialize to XmpValue
+- Add a way to get all properties
+
 ## [0.1.2](https://github.com/cavivie/xmpkit/compare/v0.1.1...v0.1.2) - 2025-12-15
 
 ### Added
