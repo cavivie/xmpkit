@@ -75,7 +75,7 @@ jobs:
           rust-target: ${{ matrix.target }}
       - name: Setup HarmonyOS environment
         if: contains(matrix.build, 'harmonyos')
-        uses: openharmony-rs/setup-ohos-sdk@v0.2
+        uses: openharmony-rs/setup-ohos-sdk@v1.0
         id: setup-ohos
         with:
           version: '5.1.0'
