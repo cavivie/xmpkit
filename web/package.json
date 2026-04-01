@@ -22,8 +22,8 @@
     "element-plus": "^2.13.0",
     "pinia": "^3.0.3",
     "vite-plugin-wasm": "^3.5.0",
-    "vue": "^3.5.27",
-    "vue-i18n": "^11.2.8",
+    "vue": "^3.5.31",
+    "vue-i18n": "^11.3.0",
     "vue-router": "^4.6.3"
   },
   "devDependencies": {
@@ -36,7 +36,7 @@
     "@vitest/eslint-plugin": "^1.6.9",
     "@vue/eslint-config-typescript": "^14.7.0",
     "@vue/test-utils": "^2.4.6",
-    "@vue/tsconfig": "^0.8.1",
+    "@vue/tsconfig": "^0.9.1",
     "eslint": "^9.37.0",
     "eslint-plugin-playwright": "^2.8.0",
     "eslint-plugin-vue": "~10.8.0",
