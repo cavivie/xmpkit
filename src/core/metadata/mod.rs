@@ -7,6 +7,7 @@ use crate::core::namespace::NamespaceMap;
 use crate::core::node::{Node, StructureNode};
 use crate::core::parser::XmpParser;
 use crate::core::serializer::XmpSerializer;
+use crate::core::xpath::PathComponent;
 use crate::types::value::XmpValue;
 use std::str::FromStr;
 
@@ -89,7 +90,13 @@ impl XmpMeta {
         if namespace.starts_with("http://") {
             Some(namespace.to_string())
         } else {
-            self.namespaces.get_uri(namespace).map(|s| s.to_string())
+            self.namespaces
+                .get_uri(namespace)
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    use crate::core::namespace::get_global_namespace_uri;
+                    get_global_namespace_uri(namespace)
+                })
         }
     }
 
@@ -160,13 +167,9 @@ impl XmpMeta {
     /// * `namespace` - The namespace URI or prefix
     /// * `path` - The property path
     pub fn has_property(&self, namespace: &str, path: &str) -> bool {
-        let ns_uri = match self.resolve_namespace_uri(namespace) {
-            Some(uri) => uri,
-            None => return false,
-        };
-
-        let full_path = format!("{}:{}", ns_uri, path);
-        root_read_with(&self.root, |root| root.has_field(&full_path))
+        root_read_with(&self.root, |root| {
+            self.get_node_by_path(root, namespace, path).is_some()
+        })
     }
 
     /// Get a property value
@@ -176,12 +179,8 @@ impl XmpMeta {
     /// * `namespace` - The namespace URI or prefix
     /// * `path` - The property path (e.g., "CreatorTool" or "creator\[1\]")
     pub fn get_property(&self, namespace: &str, path: &str) -> Option<XmpValue> {
-        // First, try direct lookup with the provided namespace
-        let ns_uri = self.resolve_namespace_uri(namespace)?;
-        let full_path = format!("{}:{}", ns_uri, path);
-
         let root = root_read_opt!(self.root);
-        let node = root.get_field(&full_path)?;
+        let (node, _) = self.get_node_by_path(&root, namespace, path)?;
 
         // Handle simple node
         if let Some(simple_node) = node.as_simple() {
@@ -207,21 +206,67 @@ impl XmpMeta {
     /// * `value` - The value to set
     pub fn set_property(&mut self, namespace: &str, path: &str, value: XmpValue) -> XmpResult<()> {
         let ns_uri = self.resolve_namespace_uri_or_error(namespace)?;
+        let parsed = crate::core::xpath::parse_path(path)?;
+        let mut root = root_write!(self.root);
 
-        let full_path = format!("{}:{}", ns_uri, path);
-        let node = match value {
-            XmpValue::String(s) => Node::simple(s),
-            XmpValue::Integer(i) => Node::simple(i.to_string()),
-            XmpValue::Boolean(b) => Node::simple(if b { "True" } else { "False" }),
-            XmpValue::DateTime(dt) => Node::simple(dt),
-            _ => {
-                return Err(XmpError::NotSupported(
-                    "Complex types not yet supported".to_string(),
-                ))
+        if parsed.components.len() == 1 {
+            let name = match &parsed.components[0] {
+                PathComponent::Name(name) => name,
+                _ => {
+                    return Err(XmpError::BadXPath(
+                        "Path must start with a name".to_string(),
+                    ))
+                }
+            };
+            let key = format!("{}:{}", ns_uri, name);
+            let node = value_to_node(value, &ns_uri, &self.namespaces)?;
+            root.set_field(key, node);
+        } else {
+            let parent_components = &parsed.components[..parsed.components.len() - 1];
+            let parent_node =
+                get_or_create_node(&mut root, &self.namespaces, &ns_uri, parent_components)?;
+            let last_comp = parsed.components.last().unwrap();
+            match last_comp {
+                PathComponent::Name(name) => {
+                    let structure = parent_node.as_structure_mut().ok_or_else(|| {
+                        XmpError::BadValue("Parent is not a structure".to_string())
+                    })?;
+                    let parent_ns_uri = {
+                        let mut resolved_uri = ns_uri;
+                        if let Some(PathComponent::Name(pname)) = parent_components.last() {
+                            if let Some(colon_pos) = pname.find(':') {
+                                let prefix = &pname[..colon_pos];
+                                if let Some(uri) = self.resolve_namespace_uri(prefix) {
+                                    resolved_uri = uri;
+                                }
+                            }
+                        }
+                        resolved_uri
+                    };
+                    let key = self.resolve_field_key(&parent_ns_uri, name);
+                    let node = value_to_node(value, &parent_ns_uri, &self.namespaces)?;
+                    structure.set_field(key, node);
+                }
+                PathComponent::Index(idx) => {
+                    if *idx == 0 {
+                        return Err(XmpError::BadXPath(
+                            "Array index must be 1 or greater".to_string(),
+                        ));
+                    }
+                    let idx_0 = *idx - 1;
+                    let array = parent_node
+                        .as_array_mut()
+                        .ok_or_else(|| XmpError::BadValue("Parent is not an array".to_string()))?;
+                    let node = value_to_node(value, &ns_uri, &self.namespaces)?;
+                    while array.len() <= idx_0 {
+                        array.append(Node::simple(""));
+                    }
+                    if let Some(item) = array.get_mut(idx_0) {
+                        *item = node;
+                    }
+                }
             }
-        };
-
-        root_write!(self.root).set_field(full_path, node);
+        }
         Ok(())
     }
 
@@ -233,9 +278,61 @@ impl XmpMeta {
     /// * `path` - The property path
     pub fn delete_property(&mut self, namespace: &str, path: &str) -> XmpResult<()> {
         let ns_uri = self.resolve_namespace_uri_or_error(namespace)?;
+        let parsed = crate::core::xpath::parse_path(path)?;
+        let mut root = root_write!(self.root);
 
-        let full_path = format!("{}:{}", ns_uri, path);
-        root_write!(self.root).remove_field(&full_path);
+        if parsed.components.is_empty() {
+            return Ok(());
+        }
+
+        if parsed.components.len() == 1 {
+            let name = match &parsed.components[0] {
+                PathComponent::Name(name) => name,
+                _ => {
+                    return Err(XmpError::BadXPath(
+                        "Path must start with a name".to_string(),
+                    ))
+                }
+            };
+            let key = format!("{}:{}", ns_uri, name);
+            root.remove_field(&key);
+        } else {
+            let parent_components = &parsed.components[..parsed.components.len() - 1];
+            if let Some((parent_node, _)) =
+                self.get_node_by_components_mut(&mut root, namespace, parent_components)
+            {
+                let last_comp = parsed.components.last().unwrap();
+                match last_comp {
+                    PathComponent::Name(name) => {
+                        if let Some(structure) = parent_node.as_structure_mut() {
+                            let parent_ns_uri = {
+                                let mut resolved_uri = ns_uri;
+                                if let Some(PathComponent::Name(pname)) = parent_components.last() {
+                                    if let Some(colon_pos) = pname.find(':') {
+                                        let prefix = &pname[..colon_pos];
+                                        if let Some(uri) = self.resolve_namespace_uri(prefix) {
+                                            resolved_uri = uri;
+                                        }
+                                    }
+                                }
+                                resolved_uri
+                            };
+                            let key = self.resolve_field_key(&parent_ns_uri, name);
+                            structure.remove_field(&key);
+                        }
+                    }
+                    PathComponent::Index(idx) => {
+                        if *idx > 0 {
+                            if let Some(array) = parent_node.as_array_mut() {
+                                if array.len() >= *idx {
+                                    let _ = array.remove(*idx - 1);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -290,15 +387,12 @@ impl XmpMeta {
     /// * `path` - The array property path (e.g., "creator")
     /// * `index` - The array index (0-based)
     pub fn get_array_item(&self, namespace: &str, path: &str, index: usize) -> Option<XmpValue> {
-        let ns_uri = self.resolve_namespace_uri(namespace)?;
-
-        let full_path = format!("{}:{}", ns_uri, path);
         let root = root_read_opt!(self.root);
-        root.get_field(&full_path)
-            .and_then(|node| node.as_array())
-            .and_then(|array| array.get(index))
-            .and_then(|item| item.as_simple())
-            .map(|n| XmpValue::String(n.value.clone()))
+        let (node, _) = self.get_node_by_path(&root, namespace, path)?;
+        let array = node.as_array()?;
+        let item = array.get(index)?;
+        let simple = item.as_simple()?;
+        Some(XmpValue::String(simple.value.clone()))
     }
 
     /// Get the size of an array property
@@ -308,13 +402,10 @@ impl XmpMeta {
     /// * `namespace` - The namespace URI or prefix
     /// * `path` - The array property path
     pub fn get_array_size(&self, namespace: &str, path: &str) -> Option<usize> {
-        let ns_uri = self.resolve_namespace_uri(namespace)?;
-
-        let full_path = format!("{}:{}", ns_uri, path);
         let root = root_read_opt!(self.root);
-        root.get_field(&full_path)
-            .and_then(|node| node.as_array())
-            .map(|array| array.len())
+        let (node, _) = self.get_node_by_path(&root, namespace, path)?;
+        let array = node.as_array()?;
+        Some(array.len())
     }
 
     /// Append an item to an array property
@@ -331,27 +422,17 @@ impl XmpMeta {
         value: XmpValue,
     ) -> XmpResult<()> {
         let ns_uri = self.resolve_namespace_uri_or_error(namespace)?;
-
-        let full_path = format!("{}:{}", ns_uri, path);
+        let parsed = crate::core::xpath::parse_path(path)?;
         let mut root = root_write!(self.root);
 
-        // Get or create array node
-        let array_node = root
-            .get_field_mut(&full_path)
-            .and_then(|node| node.as_array_mut());
-
-        if let Some(array) = array_node {
-            let item_node = value_to_node(value)?;
-            array.append(item_node);
-        } else {
-            // Create new array (default to Ordered)
-            let mut array =
-                crate::core::node::ArrayNode::new(crate::core::node::ArrayType::Ordered);
-            let item_node = value_to_node(value)?;
-            array.append(item_node);
-            root.set_field(full_path, Node::Array(array));
+        let array_node =
+            get_or_create_node(&mut root, &self.namespaces, &ns_uri, &parsed.components)?;
+        if !array_node.is_array() {
+            *array_node = Node::array(crate::core::node::ArrayType::Ordered);
         }
-
+        let array = array_node.as_array_mut().unwrap();
+        let item_node = value_to_node(value, &ns_uri, &self.namespaces)?;
+        array.append(item_node);
         Ok(())
     }
 
@@ -371,21 +452,22 @@ impl XmpMeta {
         value: XmpValue,
     ) -> XmpResult<()> {
         let ns_uri = self.resolve_namespace_uri_or_error(namespace)?;
-
-        let full_path = format!("{}:{}", ns_uri, path);
+        let parsed = crate::core::xpath::parse_path(path)?;
         let mut root = root_write!(self.root);
 
-        let array = root
-            .get_field_mut(&full_path)
-            .and_then(|node| node.as_array_mut())
+        let (array_node, _) = self
+            .get_node_by_components_mut(&mut root, namespace, &parsed.components)
             .ok_or_else(|| {
-                XmpError::BadValue(format!(
-                    "Property '{}:{}' exists but is not an array. Use get_property() or get_struct_field() instead.",
-                    ns_uri, path
-                ))
+                XmpError::BadValue(format!("Property '{}:{}' not found", ns_uri, path))
             })?;
+        let array = array_node.as_array_mut().ok_or_else(|| {
+            XmpError::BadValue(format!(
+                "Property '{}:{}' exists but is not an array. Use get_property() or get_struct_field() instead.",
+                ns_uri, path
+            ))
+        })?;
 
-        let item_node = value_to_node(value)?;
+        let item_node = value_to_node(value, &ns_uri, &self.namespaces)?;
         array.insert(index, item_node)
     }
 
@@ -403,21 +485,29 @@ impl XmpMeta {
         index: usize,
     ) -> XmpResult<()> {
         let ns_uri = self.resolve_namespace_uri_or_error(namespace)?;
-
-        let full_path = format!("{}:{}", ns_uri, path);
+        let parsed = crate::core::xpath::parse_path(path)?;
         let mut root = root_write!(self.root);
 
-        let array = root
-            .get_field_mut(&full_path)
-            .and_then(|node| node.as_array_mut())
-            .ok_or_else(|| {
+        if let Some((array_node, _)) =
+            self.get_node_by_components_mut(&mut root, namespace, &parsed.components)
+        {
+            let array = array_node.as_array_mut().ok_or_else(|| {
                 XmpError::BadValue(format!(
                     "Property '{}:{}' exists but is not an array. Use get_property() or get_struct_field() instead.",
                     ns_uri, path
                 ))
             })?;
-
-        array.remove(index).map(|_| ())
+            if index < array.len() {
+                array.remove(index).map(|_| ())
+            } else {
+                Err(XmpError::BadValue(format!(
+                    "Array index {} out of bounds",
+                    index
+                )))
+            }
+        } else {
+            Ok(())
+        }
     }
 
     /// Get a structure field value
@@ -433,13 +523,12 @@ impl XmpMeta {
         struct_path: &str,
         field_name: &str,
     ) -> Option<XmpValue> {
-        let ns_uri = self.resolve_namespace_uri(namespace)?;
-
-        let struct_full_path = format!("{}:{}", ns_uri, struct_path);
         let root = root_read_opt!(self.root);
-        root.get_field(&struct_full_path)
-            .and_then(|node| node.as_structure())
-            .and_then(|structure| structure.get_field(field_name))
+        let (struct_node, struct_ns_uri) = self.get_node_by_path(&root, namespace, struct_path)?;
+        let structure = struct_node.as_structure()?;
+        let field_key = self.resolve_field_key(&struct_ns_uri, field_name);
+        structure
+            .get_field(&field_key)
             .and_then(|field_node| field_node.as_simple())
             .map(|n| XmpValue::String(n.value.clone()))
     }
@@ -460,26 +549,31 @@ impl XmpMeta {
         value: XmpValue,
     ) -> XmpResult<()> {
         let ns_uri = self.resolve_namespace_uri_or_error(namespace)?;
-
-        let struct_full_path = format!("{}:{}", ns_uri, struct_path);
+        let parsed = crate::core::xpath::parse_path(struct_path)?;
         let mut root = root_write!(self.root);
 
-        // Get or create structure node
-        let structure_node = root
-            .get_field_mut(&struct_full_path)
-            .and_then(|node| node.as_structure_mut());
+        let struct_node =
+            get_or_create_node(&mut root, &self.namespaces, &ns_uri, &parsed.components)?;
+        let structure = struct_node.as_structure_mut().ok_or_else(|| {
+            XmpError::BadValue(format!("Property '{}' is not a structure", struct_path))
+        })?;
 
-        if let Some(structure) = structure_node {
-            let field_node = value_to_node(value)?;
-            structure.set_field(field_name.to_string(), field_node);
-        } else {
-            // Create new structure
-            let mut structure = crate::core::node::StructureNode::new();
-            let field_node = value_to_node(value)?;
-            structure.set_field(field_name.to_string(), field_node);
-            root.set_field(struct_full_path, Node::Structure(structure));
-        }
+        let struct_ns_uri = {
+            let mut resolved_uri = ns_uri;
+            if let Some(PathComponent::Name(name)) = parsed.components.last() {
+                if let Some(colon_pos) = name.find(':') {
+                    let prefix = &name[..colon_pos];
+                    if let Some(uri) = self.resolve_namespace_uri(prefix) {
+                        resolved_uri = uri;
+                    }
+                }
+            }
+            resolved_uri
+        };
 
+        let field_key = self.resolve_field_key(&struct_ns_uri, field_name);
+        let field_node = value_to_node(value, &struct_ns_uri, &self.namespaces)?;
+        structure.set_field(field_key, field_node);
         Ok(())
     }
 
@@ -497,22 +591,170 @@ impl XmpMeta {
         field_name: &str,
     ) -> XmpResult<()> {
         let ns_uri = self.resolve_namespace_uri_or_error(namespace)?;
-
-        let struct_full_path = format!("{}:{}", ns_uri, struct_path);
+        let parsed = crate::core::xpath::parse_path(struct_path)?;
         let mut root = root_write!(self.root);
 
-        let structure = root
-            .get_field_mut(&struct_full_path)
-            .and_then(|node| node.as_structure_mut())
-            .ok_or_else(|| {
+        if let Some((struct_node, _)) =
+            self.get_node_by_components_mut(&mut root, namespace, &parsed.components)
+        {
+            let structure = struct_node.as_structure_mut().ok_or_else(|| {
                 XmpError::BadValue(format!(
                     "Property '{}:{}' exists but is not a structure. Use get_property() or get_array_item() instead.",
                     ns_uri, struct_path
                 ))
             })?;
-
-        structure.remove_field(field_name);
+            let struct_ns_uri = {
+                let mut resolved_uri = ns_uri;
+                if let Some(PathComponent::Name(name)) = parsed.components.last() {
+                    if let Some(colon_pos) = name.find(':') {
+                        let prefix = &name[..colon_pos];
+                        if let Some(uri) = self.resolve_namespace_uri(prefix) {
+                            resolved_uri = uri;
+                        }
+                    }
+                }
+                resolved_uri
+            };
+            let field_key = self.resolve_field_key(&struct_ns_uri, field_name);
+            structure.remove_field(&field_key);
+        }
         Ok(())
+    }
+
+    /// Navigate the path and return the node and the last resolved namespace URI
+    fn get_node_by_path<'a>(
+        &self,
+        root: &'a StructureNode,
+        namespace: &str,
+        path: &str,
+    ) -> Option<(&'a Node, String)> {
+        let ns_uri = self.resolve_namespace_uri(namespace)?;
+        let parsed = crate::core::xpath::parse_path(path).ok()?;
+        if parsed.components.is_empty() {
+            return None;
+        }
+
+        let mut current_ns_uri = ns_uri;
+        let first_name = match &parsed.components[0] {
+            PathComponent::Name(name) => name,
+            _ => return None,
+        };
+        let first_key = format!("{}:{}", current_ns_uri, first_name);
+        let mut current = root.get_field(&first_key)?;
+
+        for i in 1..parsed.components.len() {
+            match &parsed.components[i] {
+                PathComponent::Index(idx) => {
+                    if *idx == 0 {
+                        return None;
+                    }
+                    let array = current.as_array()?;
+                    current = array.get(*idx - 1)?;
+                }
+                PathComponent::Name(name) => {
+                    let structure = current.as_structure()?;
+                    let key = if let Some(colon_pos) = name.find(':') {
+                        let prefix = &name[..colon_pos];
+                        let local_name = &name[colon_pos + 1..];
+                        if let Some(uri) = self.resolve_namespace_uri(prefix) {
+                            current_ns_uri = uri;
+                            format!("{}:{}", current_ns_uri, local_name)
+                        } else {
+                            name.clone()
+                        }
+                    } else {
+                        format!("{}:{}", current_ns_uri, name)
+                    };
+                    current = structure.get_field(&key)?;
+                }
+            }
+        }
+
+        let mut resolved_uri = current_ns_uri;
+        if let Some(PathComponent::Name(name)) = parsed.components.last() {
+            if let Some(colon_pos) = name.find(':') {
+                let prefix = &name[..colon_pos];
+                if let Some(uri) = self.resolve_namespace_uri(prefix) {
+                    resolved_uri = uri;
+                }
+            }
+        }
+
+        Some((current, resolved_uri))
+    }
+
+    /// Navigate the path and return a mutable reference to the node and the last resolved namespace URI
+    fn get_node_by_components_mut<'a>(
+        &self,
+        root: &'a mut StructureNode,
+        namespace: &str,
+        components: &[PathComponent],
+    ) -> Option<(&'a mut Node, String)> {
+        if components.is_empty() {
+            return None;
+        }
+
+        let ns_uri = self.resolve_namespace_uri(namespace)?;
+        let mut current_ns_uri = ns_uri;
+        let first_name = match &components[0] {
+            PathComponent::Name(name) => name,
+            _ => return None,
+        };
+        let first_key = format!("{}:{}", current_ns_uri, first_name);
+        let mut current = root.get_field_mut(&first_key)?;
+
+        for component in components.iter().skip(1) {
+            let next = match component {
+                PathComponent::Index(idx) => {
+                    if *idx == 0 {
+                        return None;
+                    }
+                    let array = current.as_array_mut()?;
+                    array.get_mut(*idx - 1)?
+                }
+                PathComponent::Name(name) => {
+                    let structure = current.as_structure_mut()?;
+                    let key = if let Some(colon_pos) = name.find(':') {
+                        let prefix = &name[..colon_pos];
+                        let local_name = &name[colon_pos + 1..];
+                        if let Some(uri) = self.resolve_namespace_uri(prefix) {
+                            current_ns_uri = uri;
+                            format!("{}:{}", current_ns_uri, local_name)
+                        } else {
+                            name.clone()
+                        }
+                    } else {
+                        format!("{}:{}", current_ns_uri, name)
+                    };
+                    structure.get_field_mut(&key)?
+                }
+            };
+            current = next;
+        }
+
+        let mut resolved_uri = current_ns_uri;
+        if let Some(PathComponent::Name(name)) = components.last() {
+            if let Some(colon_pos) = name.find(':') {
+                let prefix = &name[..colon_pos];
+                if let Some(uri) = self.resolve_namespace_uri(prefix) {
+                    resolved_uri = uri;
+                }
+            }
+        }
+
+        Some((current, resolved_uri))
+    }
+
+    /// Resolve field name key inside structure
+    fn resolve_field_key(&self, struct_ns_uri: &str, field_name: &str) -> String {
+        if let Some(colon_pos) = field_name.find(':') {
+            let prefix = &field_name[..colon_pos];
+            let name = &field_name[colon_pos + 1..];
+            if let Some(uri) = self.resolve_namespace_uri(prefix) {
+                return format!("{}:{}", uri, name);
+            }
+        }
+        format!("{}:{}", struct_ns_uri, field_name)
     }
 
     /// Set a localized text property
@@ -824,16 +1066,156 @@ impl XmpMeta {
 }
 
 /// Convert XmpValue to Node
-fn value_to_node(value: XmpValue) -> XmpResult<Node> {
+fn value_to_node(
+    value: XmpValue,
+    default_ns_uri: &str,
+    namespaces: &NamespaceMap,
+) -> XmpResult<Node> {
     match value {
         XmpValue::String(s) => Ok(Node::simple(s)),
         XmpValue::Integer(i) => Ok(Node::simple(i.to_string())),
         XmpValue::Boolean(b) => Ok(Node::simple(if b { "True" } else { "False" })),
         XmpValue::DateTime(dt) => Ok(Node::simple(dt)),
-        _ => Err(XmpError::NotSupported(
-            "Complex types not yet supported".to_string(),
-        )),
+        XmpValue::Array(arr) => {
+            use crate::core::node::{ArrayNode, ArrayType};
+            // Note: XmpValue::Array does not carry the specific array type (Seq, Bag, or Alt).
+            // We default to ArrayType::Unordered (Bag) here. As a limitation, round-trips of
+            // Seq or Alt arrays parsed and then set/serialized via XmpValue may lose their type info.
+            let mut array_node = ArrayNode::new(ArrayType::Unordered);
+            for item in arr {
+                let item_node = value_to_node(item, default_ns_uri, namespaces)?;
+                array_node.append(item_node);
+            }
+            Ok(Node::Array(array_node))
+        }
+        XmpValue::Structure(structure) => {
+            let mut structure_node = crate::core::node::StructureNode::new();
+            for (key, val) in structure {
+                let resolved_key = if let Some(colon_pos) = key.find(':') {
+                    let prefix = &key[..colon_pos];
+                    let local_name = &key[colon_pos + 1..];
+                    if let Some(uri) = namespaces.get_uri(prefix) {
+                        format!("{}:{}", uri, local_name)
+                    } else {
+                        // Check global namespaces
+                        use crate::core::namespace::get_global_namespace_uri;
+                        if let Some(uri) = get_global_namespace_uri(prefix) {
+                            format!("{}:{}", uri, local_name)
+                        } else {
+                            key.clone()
+                        }
+                    }
+                } else {
+                    format!("{}:{}", default_ns_uri, key)
+                };
+                let val_node = value_to_node(val, default_ns_uri, namespaces)?;
+                structure_node.set_field(resolved_key, val_node);
+            }
+            Ok(Node::Structure(structure_node))
+        }
     }
+}
+
+/// Helper function to traverse or create nested nodes
+fn get_or_create_node<'a>(
+    root: &'a mut StructureNode,
+    namespaces: &NamespaceMap,
+    ns_uri: &str,
+    components: &[crate::core::xpath::PathComponent],
+) -> XmpResult<&'a mut Node> {
+    use crate::core::xpath::PathComponent;
+    if components.is_empty() {
+        return Err(XmpError::BadXPath("Empty path components".to_string()));
+    }
+
+    let mut current_ns_uri = ns_uri.to_string();
+
+    // Handle first component
+    let first_name = match &components[0] {
+        PathComponent::Name(name) => name,
+        _ => {
+            return Err(XmpError::BadXPath(
+                "Path must start with a property name".to_string(),
+            ))
+        }
+    };
+
+    let first_key = format!("{}:{}", current_ns_uri, first_name);
+
+    // Determine default node
+    let default_node = if components.len() > 1 {
+        match &components[1] {
+            PathComponent::Index(_) => Node::array(crate::core::node::ArrayType::Ordered),
+            _ => Node::structure(),
+        }
+    } else {
+        Node::structure()
+    };
+
+    let mut current = root.fields.entry(first_key).or_insert(default_node);
+
+    // Handle remaining components
+    for i in 1..components.len() {
+        let next_is_index =
+            i + 1 < components.len() && matches!(&components[i + 1], PathComponent::Index(_));
+        let default_child = if next_is_index {
+            Node::array(crate::core::node::ArrayType::Ordered)
+        } else {
+            Node::structure()
+        };
+
+        match &components[i] {
+            PathComponent::Index(idx) => {
+                if *idx == 0 {
+                    return Err(XmpError::BadXPath(
+                        "Array index must be 1 or greater".to_string(),
+                    ));
+                }
+                let idx_0 = *idx - 1;
+
+                if !matches!(current, Node::Array(_)) {
+                    *current = Node::array(crate::core::node::ArrayType::Ordered);
+                }
+
+                let array = current.as_array_mut().unwrap();
+                while array.len() <= idx_0 {
+                    array.append(default_child.clone());
+                }
+                current = array.get_mut(idx_0).unwrap();
+            }
+            PathComponent::Name(name) => {
+                if !matches!(current, Node::Structure(_)) {
+                    *current = Node::structure();
+                }
+
+                let structure = current.as_structure_mut().unwrap();
+
+                let key = if let Some(colon_pos) = name.find(':') {
+                    let prefix = &name[..colon_pos];
+                    let local_name = &name[colon_pos + 1..];
+                    if let Some(uri) = namespaces.get_uri(prefix) {
+                        current_ns_uri = uri.to_string();
+                        format!("{}:{}", current_ns_uri, local_name)
+                    } else {
+                        // Check global namespaces
+                        use crate::core::namespace::get_global_namespace_uri;
+                        if let Some(uri) = get_global_namespace_uri(prefix) {
+                            current_ns_uri = uri;
+                            format!("{}:{}", current_ns_uri, local_name)
+                        } else {
+                            name.clone()
+                        }
+                    }
+                } else {
+                    format!("{}:{}", current_ns_uri, name)
+                };
+
+                current = structure.fields.entry(key).or_insert(default_child);
+            }
+        }
+    }
+
+    Ok(current)
 }
 
 impl Default for XmpMeta {
