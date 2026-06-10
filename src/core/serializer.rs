@@ -44,6 +44,7 @@ impl XmpSerializer {
             if let Some((prefix, _, ns_uri)) = &parsed_path {
                 used_namespaces.insert(ns_uri.clone(), prefix.clone());
             }
+            self.collect_namespaces(node, &mut used_namespaces);
 
             if self.should_serialize_as_element(key, node) {
                 complex_nodes.push((key.clone(), node.clone()));
@@ -381,6 +382,29 @@ impl XmpSerializer {
         let packet = format!("{}\n{}\n{}{}", header, rdf_content, padding, trailer);
 
         Ok(packet)
+    }
+
+    fn collect_namespaces(
+        &self,
+        node: &Node,
+        used_namespaces: &mut std::collections::HashMap<String, String>,
+    ) {
+        match node {
+            Node::Simple(_) => {}
+            Node::Array(arr) => {
+                for item in &arr.items {
+                    self.collect_namespaces(item, used_namespaces);
+                }
+            }
+            Node::Structure(structure) => {
+                for (key, value) in &structure.fields {
+                    if let Some((prefix, _, ns_uri)) = self.parse_path_with_namespace(key) {
+                        used_namespaces.insert(ns_uri, prefix);
+                    }
+                    self.collect_namespaces(value, used_namespaces);
+                }
+            }
+        }
     }
 }
 
