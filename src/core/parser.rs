@@ -668,4 +668,22 @@ Line3</test:Multiline>
         let semantic = item.get_field(&semantic_key).unwrap().as_simple().unwrap();
         assert_eq!(semantic.value, "Primary");
     }
+
+    #[test]
+    fn test_exif_ex_namespace() {
+        let mut parser = XmpParser::new();
+        let xml = r#"
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:exifEX="http://cipa.jp/exif/1.0/">
+  <rdf:Description rdf:about=""
+                   exifEX:LensMake="Google"/>
+</rdf:RDF>"#;
+
+        let root = parser.parse_rdf(xml).unwrap();
+        let lens_make_key = "http://cipa.jp/exif/1.0/:LensMake";
+        assert!(root.has_field(lens_make_key));
+
+        let lens_make = root.get_field(lens_make_key).unwrap().as_simple().unwrap();
+        assert_eq!(lens_make.value, "Google");
+    }
 }

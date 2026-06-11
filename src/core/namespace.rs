@@ -20,6 +20,8 @@ pub mod ns {
     pub const EXIF: &str = "http://ns.adobe.com/exif/1.0/";
     /// EXIF Aux namespace
     pub const EXIF_AUX: &str = "http://ns.adobe.com/exif/1.0/aux/";
+    /// EXIF 2.32 Extension namespace
+    pub const EXIF_EX: &str = "http://cipa.jp/exif/1.0/";
     /// IPTC Core namespace
     pub const IPTC_CORE: &str = "http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/";
     /// IPTC Extension namespace
@@ -65,7 +67,9 @@ pub mod ns {
     /// XML prefix
     pub const XML_PREFIX: &str = "xml";
     /// EXIF Aux prefix
-    pub const EXIF_AUX_PREFIX: &str = "exifEX";
+    pub const EXIF_AUX_PREFIX: &str = "aux";
+    /// EXIF 2.32 Extension prefix
+    pub const EXIF_EX_PREFIX: &str = "exifEX";
     /// IPTC Core prefix
     pub const IPTC_CORE_PREFIX: &str = "Iptc4xmpCore";
     /// IPTC Extension prefix
@@ -181,6 +185,7 @@ impl NamespaceMap {
         self.register(ns::XML, ns::XML_PREFIX).unwrap();
         // Register others without prefix conflicts
         self.register(ns::EXIF_AUX, ns::EXIF_AUX_PREFIX).unwrap();
+        self.register(ns::EXIF_EX, ns::EXIF_EX_PREFIX).unwrap();
         self.register(ns::IPTC_CORE, ns::IPTC_CORE_PREFIX).unwrap();
         self.register(ns::IPTC_EXT, ns::IPTC_EXT_PREFIX).unwrap();
         self.register(ns::PHOTOSHOP, ns::PHOTOSHOP_PREFIX).unwrap();
@@ -267,6 +272,7 @@ pub fn get_builtin_namespace_uris() -> Vec<String> {
         ns::DC.to_string(),
         ns::EXIF.to_string(),
         ns::EXIF_AUX.to_string(),
+        ns::EXIF_EX.to_string(),
         ns::IPTC_CORE.to_string(),
         ns::IPTC_EXT.to_string(),
         ns::PHOTOSHOP.to_string(),
