@@ -125,6 +125,7 @@ impl XmpParser {
                         if let Node::Simple(sn) = &mut node {
                             sn.qualifiers.extend(current_qualifiers.clone());
                         }
+                        self.populate_node_from_attributes(&attrs, &mut node, &current_qualifiers)?;
                         stack.push(("".to_string(), node, String::new()));
                     } else if description_depth > 0 && !self.is_rdf_element(&name) {
                         let colon_pos = name.find(':');
@@ -153,6 +154,7 @@ impl XmpParser {
                             Node::Structure(sn) => sn.qualifiers.extend(current_qualifiers.clone()),
                             Node::Array(sn) => sn.qualifiers.extend(current_qualifiers.clone()),
                         }
+                        self.populate_node_from_attributes(&attrs, &mut node, &current_qualifiers)?;
                         stack.push((key, node, String::new()));
                     }
                 }
@@ -223,6 +225,7 @@ impl XmpParser {
                         if let Node::Simple(sn) = &mut node {
                             sn.qualifiers.extend(current_qualifiers.clone());
                         }
+                        self.populate_node_from_attributes(&attrs, &mut node, &current_qualifiers)?;
 
                         if name == "li" || name.ends_with(":li") {
                             Self::insert_node_into_parent(
@@ -412,6 +415,52 @@ impl XmpParser {
         Ok(())
     }
 
+    /// Populate a node's fields from XML attributes if they represent properties.
+    /// If the node is Simple and attributes are present, it will be converted to Structure.
+    fn populate_node_from_attributes(
+        &self,
+        attrs: &[(String, String)],
+        node: &mut Node,
+        qualifiers: &[Qualifier],
+    ) -> XmpResult<()> {
+        let has_properties = attrs.iter().any(|(k, _)| {
+            if self.should_skip_attribute(k) {
+                return false;
+            }
+            if let Some(pos) = k.find(':') {
+                let prefix = &k[..pos];
+                self.namespaces.get_uri(prefix).is_some()
+            } else {
+                false
+            }
+        });
+
+        if !has_properties {
+            return Ok(());
+        }
+
+        // Convert Node to Structure if it is not already.
+        if !node.is_structure() {
+            let mut struct_node = StructureNode::new();
+            match node {
+                Node::Simple(sn) => {
+                    struct_node.qualifiers = std::mem::take(&mut sn.qualifiers);
+                }
+                Node::Array(sn) => {
+                    struct_node.qualifiers = std::mem::take(&mut sn.qualifiers);
+                }
+                _ => {}
+            }
+            *node = Node::Structure(struct_node);
+        }
+
+        if let Node::Structure(ref mut struct_node) = node {
+            self.handle_description_attributes(attrs, struct_node, qualifiers)?;
+        }
+
+        Ok(())
+    }
+
     /// Check if attribute should be skipped during Description processing
     fn should_skip_attribute(&self, attr_name: &str) -> bool {
         attr_name == "xmlns"
@@ -419,6 +468,8 @@ impl XmpParser {
             || attr_name == "about"
             || attr_name.ends_with(":about")
             || self.is_lang_attribute(attr_name)
+            || attr_name == "rdf:parseType"
+            || attr_name.ends_with(":parseType")
     }
 }
 
@@ -551,5 +602,70 @@ Line3</test:Multiline>
         let node = root.get_field("http://example.com/test/:CharRef").unwrap();
         let simple = node.as_simple().unwrap();
         assert_eq!(simple.value, "Hello World & Universe");
+    }
+
+    #[test]
+    fn test_parse_attributes_on_li() {
+        let mut parser = XmpParser::new();
+        let xml = r#"
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/"
+         xmlns:stEvt="http://ns.adobe.com/xap/1.0/sType/ResourceEvent#">
+  <rdf:Description rdf:about="">
+    <xmpMM:History>
+      <rdf:Seq>
+        <rdf:li stEvt:action="saved"/>
+      </rdf:Seq>
+    </xmpMM:History>
+  </rdf:Description>
+</rdf:RDF>"#;
+
+        let root = parser.parse_rdf(xml).unwrap();
+        let xmp_mm_uri = "http://ns.adobe.com/xap/1.0/mm/";
+        let st_evt_uri = "http://ns.adobe.com/xap/1.0/sType/ResourceEvent#";
+
+        let history_key = format!("{}:History", xmp_mm_uri);
+        let history = root.get_field(&history_key).unwrap().as_array().unwrap();
+        assert_eq!(history.len(), 1);
+
+        let li = history.get(0).unwrap().as_structure().unwrap();
+        let action_key = format!("{}:action", st_evt_uri);
+        let action = li.get_field(&action_key).unwrap().as_simple().unwrap();
+        assert_eq!(action.value, "saved");
+    }
+
+    #[test]
+    fn test_parse_attributes_on_nested_element() {
+        let mut parser = XmpParser::new();
+        let xml = r#"
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:Container="http://ns.google.com/photos/1.0/container/"
+         xmlns:Item="http://ns.google.com/photos/1.0/container/item/">
+  <rdf:Description rdf:about="">
+    <Container:Directory>
+      <rdf:Seq>
+        <rdf:li rdf:parseType="Resource">
+          <Container:Item Item:Semantic="Primary"/>
+        </rdf:li>
+      </rdf:Seq>
+    </Container:Directory>
+  </rdf:Description>
+</rdf:RDF>"#;
+
+        let root = parser.parse_rdf(xml).unwrap();
+        let container_uri = "http://ns.google.com/photos/1.0/container/";
+        let item_uri = "http://ns.google.com/photos/1.0/container/item/";
+
+        let directory_key = format!("{}:Directory", container_uri);
+        let directory = root.get_field(&directory_key).unwrap().as_array().unwrap();
+        assert_eq!(directory.len(), 1);
+
+        let li = directory.get(0).unwrap().as_structure().unwrap();
+        let item_key = format!("{}:Item", container_uri);
+        let item = li.get_field(&item_key).unwrap().as_structure().unwrap();
+
+        let semantic_key = format!("{}:Semantic", item_uri);
+        let semantic = item.get_field(&semantic_key).unwrap().as_simple().unwrap();
+        assert_eq!(semantic.value, "Primary");
     }
 }
