@@ -25,6 +25,8 @@ pub enum Namespace {
     Exif,
     /// EXIF Aux namespace
     ExifAux,
+    /// EXIF 2.32 Extension namespace
+    ExifEx,
     /// IPTC Core namespace
     IptcCore,
     /// IPTC Extension namespace
@@ -76,6 +78,7 @@ pub fn namespace_uri(ns: Namespace) -> String {
         Namespace::Dc => namespace::ns::DC.to_string(),
         Namespace::Exif => namespace::ns::EXIF.to_string(),
         Namespace::ExifAux => namespace::ns::EXIF_AUX.to_string(),
+        Namespace::ExifEx => namespace::ns::EXIF_EX.to_string(),
         Namespace::IptcCore => namespace::ns::IPTC_CORE.to_string(),
         Namespace::IptcExt => namespace::ns::IPTC_EXT.to_string(),
         Namespace::Photoshop => namespace::ns::PHOTOSHOP.to_string(),
@@ -104,6 +107,7 @@ pub fn namespace_prefix(ns: Namespace) -> String {
         Namespace::Dc => namespace::ns::DC_PREFIX.to_string(),
         Namespace::Exif => namespace::ns::EXIF_PREFIX.to_string(),
         Namespace::ExifAux => namespace::ns::EXIF_AUX_PREFIX.to_string(),
+        Namespace::ExifEx => namespace::ns::EXIF_EX_PREFIX.to_string(),
         Namespace::IptcCore => namespace::ns::IPTC_CORE_PREFIX.to_string(),
         Namespace::IptcExt => namespace::ns::IPTC_EXT_PREFIX.to_string(),
         Namespace::Photoshop => namespace::ns::PHOTOSHOP_PREFIX.to_string(),
