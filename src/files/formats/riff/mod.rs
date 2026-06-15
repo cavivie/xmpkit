@@ -379,15 +379,15 @@ pub mod info {
                         );
                     }
                 }
-                id if id == ISFT => {
+                id if id == ISFT
                     // Software -> xmp:CreatorTool
-                    if meta.get_property(ns::XMP, "CreatorTool").is_none() {
-                        let _ = meta.set_property(
-                            ns::XMP,
-                            "CreatorTool",
-                            crate::types::value::XmpValue::String(item.value.clone()),
-                        );
-                    }
+                    && meta.get_property(ns::XMP, "CreatorTool").is_none() =>
+                {
+                    let _ = meta.set_property(
+                        ns::XMP,
+                        "CreatorTool",
+                        crate::types::value::XmpValue::String(item.value.clone()),
+                    );
                 }
                 _ => {} // Ignore other INFO chunks
             }
