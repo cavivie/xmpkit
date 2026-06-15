@@ -1,8 +1,2 @@
-//! Integration tests for xmpkit
-//!
-//! These tests verify the library works correctly with real files and
-//! are compatible with the original xmp-toolkit-rs tests.
-
-mod fixtures;
-mod xmp_file;
-mod xmp_meta;
+// This file is intentionally left empty to avoid duplicate module compilation warnings from clippy.
+// The tests are run as standalone crates in tests/xmp_file.rs and tests/xmp_meta.rs.

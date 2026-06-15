@@ -168,6 +168,35 @@ mod from_str {
     }
 
     #[test]
+    fn parse_mwg_regions_with_description() {
+        let xmp_str = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:mwg-rs="http://www.metadataworkinggroup.com/schemas/regions/">
+   <mwg-rs:Regions>
+    <mwg-rs:RegionList>
+     <rdf:Seq>
+      <rdf:li>
+       <mwg-rs:Description>This is a region description</mwg-rs:Description>
+      </rdf:li>
+     </rdf:Seq>
+    </mwg-rs:RegionList>
+   </mwg-rs:Regions>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>"#;
+
+        let meta = xmp_str.parse::<XmpMeta>().unwrap();
+        let path = "Regions/mwg-rs:RegionList[1]/mwg-rs:Description";
+        let ns = "http://www.metadataworkinggroup.com/schemas/regions/";
+
+        assert_eq!(
+            meta.get_property(ns, path),
+            Some(XmpValue::String("This is a region description".to_string()))
+        );
+    }
+
+    #[test]
     fn invalid_xml() {
         let result = "not valid xml".parse::<XmpMeta>();
         assert!(result.is_err());

@@ -458,7 +458,7 @@ mod tests {
 
     #[test]
     fn test_can_handle_valid_svg() {
-        let handler = SvgHandler::default();
+        let handler = SvgHandler;
         let svg = create_test_svg();
         let mut cursor = Cursor::new(svg.as_bytes());
 
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_can_handle_svg_with_xmp() {
-        let handler = SvgHandler::default();
+        let handler = SvgHandler;
         let svg = create_test_svg_with_xmp();
         let mut cursor = Cursor::new(svg.as_bytes());
 
@@ -476,7 +476,7 @@ mod tests {
 
     #[test]
     fn test_can_handle_invalid() {
-        let handler = SvgHandler::default();
+        let handler = SvgHandler;
 
         // Not SVG - HTML
         let mut cursor = Cursor::new(b"<html><body>Hello</body></html>");
@@ -493,7 +493,7 @@ mod tests {
 
     #[test]
     fn test_read_xmp_no_xmp() {
-        let handler = SvgHandler::default();
+        let handler = SvgHandler;
         let svg = create_test_svg();
         let mut cursor = Cursor::new(svg.as_bytes());
 
@@ -504,7 +504,7 @@ mod tests {
 
     #[test]
     fn test_read_xmp_with_xmp() {
-        let handler = SvgHandler::default();
+        let handler = SvgHandler;
         let svg = create_test_svg_with_xmp();
         let mut cursor = Cursor::new(svg.as_bytes());
 
@@ -516,7 +516,7 @@ mod tests {
 
     #[test]
     fn test_write_xmp_new() {
-        let handler = SvgHandler::default();
+        let handler = SvgHandler;
         let svg = create_test_svg();
         let mut reader = Cursor::new(svg.as_bytes());
         let mut writer = Cursor::new(Vec::new());
@@ -538,7 +538,7 @@ mod tests {
 
     #[test]
     fn test_write_xmp_replace() {
-        let handler = SvgHandler::default();
+        let handler = SvgHandler;
         let svg = create_test_svg_with_xmp();
         let mut reader = Cursor::new(svg.as_bytes());
         let mut writer = Cursor::new(Vec::new());
@@ -566,14 +566,14 @@ mod tests {
 
     #[test]
     fn test_format_info() {
-        let handler = SvgHandler::default();
+        let handler = SvgHandler;
         assert_eq!(handler.format_name(), "SVG");
         assert!(handler.extensions().contains(&"svg"));
     }
 
     #[test]
     fn test_handles_comments() {
-        let handler = SvgHandler::default();
+        let handler = SvgHandler;
         let svg = r#"<?xml version="1.0"?>
 <!-- This is a comment -->
 <svg xmlns="http://www.w3.org/2000/svg">
@@ -593,7 +593,7 @@ mod tests {
 
     #[test]
     fn test_handles_cdata() {
-        let handler = SvgHandler::default();
+        let handler = SvgHandler;
         let svg = r#"<?xml version="1.0"?>
 <svg xmlns="http://www.w3.org/2000/svg">
   <script><![CDATA[
