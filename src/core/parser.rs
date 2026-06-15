@@ -10,6 +10,12 @@ use quick_xml::escape::unescape;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 
+struct StackFrame {
+    key: String,
+    node: Node,
+    accumulated_text: String,
+}
+
 /// Parser for XMP Packets
 pub struct XmpParser {
     namespaces: NamespaceMap,
@@ -76,168 +82,54 @@ impl XmpParser {
 
         let mut buf = Vec::new();
         let mut root = StructureNode::new();
-        let mut stack: Vec<(String, Node, String)> = Vec::new();
+        let mut stack: Vec<StackFrame> = Vec::new();
         let mut current_qualifiers: Vec<Qualifier> = Vec::new();
         let mut description_depth: usize = 0;
 
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                    let attrs = Self::collect_attributes(&e);
-                    self.process_attributes(&attrs, &mut current_qualifiers);
-
-                    // Handle RDF Description
-                    if self.is_description_element(&name) {
-                        description_depth += 1;
-                        self.handle_description_attributes(&attrs, &mut root, &current_qualifiers)?;
-                    }
-                    // Handle RDF containers (Seq, Bag, Alt)
-                    else if description_depth > 0 && self.is_array_container(&name) {
-                        if let Some((_, parent, _)) = stack.last_mut() {
-                            use crate::core::node::{ArrayNode, ArrayType};
-                            let array_type = if name.contains("Seq") {
-                                ArrayType::Ordered
-                            } else if name.contains("Bag") {
-                                ArrayType::Unordered
-                            } else {
-                                ArrayType::Alternative
-                            };
-                            let mut array_node = ArrayNode::new(array_type);
-                            // Preserve any qualifiers from the parent (e.g. from attributes)
-                            match parent {
-                                Node::Simple(sn) => {
-                                    array_node.qualifiers = std::mem::take(&mut sn.qualifiers);
-                                }
-                                Node::Structure(sn) => {
-                                    array_node.qualifiers = std::mem::take(&mut sn.qualifiers);
-                                }
-                                Node::Array(sn) => {
-                                    array_node.qualifiers = std::mem::take(&mut sn.qualifiers);
-                                }
-                            }
-                            *parent = Node::Array(array_node);
-                        }
-                    }
-                    // Handle li (list item) - add to current array
-                    else if description_depth > 0 && self.is_li_element(&name) {
-                        let mut node = Node::simple("");
-                        if let Node::Simple(sn) = &mut node {
-                            sn.qualifiers.extend(current_qualifiers.clone());
-                        }
-                        self.populate_node_from_attributes(&attrs, &mut node, &current_qualifiers)?;
-                        stack.push(("".to_string(), node, String::new()));
-                    } else if description_depth > 0 && !self.is_rdf_element(&name) {
-                        let colon_pos = name.find(':');
-                        let key = if let Some(pos) = colon_pos {
-                            let prefix = &name[..pos];
-                            let prop_name = &name[pos + 1..];
-                            if let Some(ns_uri) = self.namespaces.get_uri(prefix) {
-                                format!("{}:{}", ns_uri, prop_name)
-                            } else {
-                                name.clone()
-                            }
-                        } else {
-                            name.clone()
-                        };
-
-                        let has_parse_type_resource = attrs
-                            .iter()
-                            .any(|(k, v)| k == "rdf:parseType" && v == "Resource");
-                        let mut node = if has_parse_type_resource {
-                            Node::structure()
-                        } else {
-                            Node::simple("")
-                        };
-                        match &mut node {
-                            Node::Simple(sn) => sn.qualifiers.extend(current_qualifiers.clone()),
-                            Node::Structure(sn) => sn.qualifiers.extend(current_qualifiers.clone()),
-                            Node::Array(sn) => sn.qualifiers.extend(current_qualifiers.clone()),
-                        }
-                        self.populate_node_from_attributes(&attrs, &mut node, &current_qualifiers)?;
-                        stack.push((key, node, String::new()));
-                    }
+                    self.handle_start_element(
+                        &e,
+                        &mut root,
+                        &mut stack,
+                        &mut current_qualifiers,
+                        &mut description_depth,
+                    )?;
                 }
                 Ok(Event::Text(e)) => {
                     if description_depth > 0 {
-                        if let Some((_, Node::Simple(_), ref mut acc_text)) = stack.last_mut() {
-                            let raw_text = String::from_utf8_lossy(e.as_ref());
-                            acc_text.push_str(&raw_text);
+                        if let Some(frame) = stack.last_mut() {
+                            if let Node::Simple(_) = frame.node {
+                                let raw_text = String::from_utf8_lossy(e.as_ref());
+                                frame.accumulated_text.push_str(&raw_text);
+                            }
                         }
                     }
                 }
                 Ok(Event::GeneralRef(e)) => {
                     if description_depth > 0 {
-                        if let Some((_, Node::Simple(_), ref mut acc_text)) = stack.last_mut() {
-                            let name = String::from_utf8_lossy(e.as_ref());
-                            acc_text.push('&');
-                            acc_text.push_str(&name);
-                            acc_text.push(';');
+                        if let Some(frame) = stack.last_mut() {
+                            if let Node::Simple(_) = frame.node {
+                                let name = String::from_utf8_lossy(e.as_ref());
+                                frame.accumulated_text.push('&');
+                                frame.accumulated_text.push_str(&name);
+                                frame.accumulated_text.push(';');
+                            }
                         }
                     }
                 }
                 Ok(Event::End(e)) => {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-
-                    if self.is_description_element(&name) {
-                        description_depth = description_depth.saturating_sub(1);
-                    } else if description_depth > 0
-                        && !self.is_array_container(&name)
-                        && !self.is_rdf_element(&name)
-                    {
-                        if let Some((key, mut node, acc_text)) = stack.pop() {
-                            if let Node::Simple(ref mut simple) = node {
-                                if !acc_text.is_empty() {
-                                    let text = match unescape(&acc_text) {
-                                        Ok(unescaped) => unescaped.to_string(),
-                                        Err(_) => acc_text.to_string(),
-                                    };
-                                    simple.value = text.trim().to_string();
-                                }
-                            }
-                            Self::insert_node_into_parent(&mut root, &mut stack, key, node);
-                        }
-                    }
+                    self.handle_end_element(&e, &mut root, &mut stack, &mut description_depth)?;
                 }
                 Ok(Event::Empty(e)) => {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                    let attrs = Self::collect_attributes_empty(&e);
-                    self.process_attributes(&attrs, &mut current_qualifiers);
-
-                    // Handle RDF Description
-                    if self.is_description_element(&name) {
-                        self.handle_description_attributes(&attrs, &mut root, &current_qualifiers)?;
-                    } else if description_depth > 0 && !self.is_rdf_element(&name) {
-                        let colon_pos = name.find(':');
-                        let key = if let Some(pos) = colon_pos {
-                            let prefix = &name[..pos];
-                            let prop_name = &name[pos + 1..];
-                            if let Some(ns_uri) = self.namespaces.get_uri(prefix) {
-                                format!("{}:{}", ns_uri, prop_name)
-                            } else {
-                                name.clone()
-                            }
-                        } else {
-                            name.clone()
-                        };
-
-                        let mut node = Node::simple("");
-                        if let Node::Simple(sn) = &mut node {
-                            sn.qualifiers.extend(current_qualifiers.clone());
-                        }
-                        self.populate_node_from_attributes(&attrs, &mut node, &current_qualifiers)?;
-
-                        if name == "li" || name.ends_with(":li") {
-                            Self::insert_node_into_parent(
-                                &mut root,
-                                &mut stack,
-                                "".to_string(),
-                                node,
-                            );
-                        } else {
-                            Self::insert_node_into_parent(&mut root, &mut stack, key, node);
-                        }
-                    }
+                    self.handle_empty_element(
+                        &e,
+                        &mut root,
+                        &mut stack,
+                        &mut current_qualifiers,
+                        description_depth,
+                    )?;
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
@@ -254,11 +146,12 @@ impl XmpParser {
     /// Helper to insert a completed node into its parent or root
     fn insert_node_into_parent(
         root: &mut StructureNode,
-        stack: &mut [(String, Node, String)],
+        stack: &mut [StackFrame],
         key: String,
         node: Node,
     ) {
-        if let Some((_, parent, _)) = stack.last_mut() {
+        if let Some(frame) = stack.last_mut() {
+            let parent = &mut frame.node;
             match parent {
                 Node::Array(arr) => {
                     arr.append(node);
@@ -280,6 +173,183 @@ impl XmpParser {
         } else {
             root.set_field(key, node);
         }
+    }
+
+    /// Handle Start element event during RDF parsing
+    fn handle_start_element(
+        &mut self,
+        e: &quick_xml::events::BytesStart<'_>,
+        root: &mut StructureNode,
+        stack: &mut Vec<StackFrame>,
+        current_qualifiers: &mut Vec<Qualifier>,
+        description_depth: &mut usize,
+    ) -> XmpResult<()> {
+        let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+        let attrs = Self::collect_attributes(e);
+        self.process_attributes(&attrs, current_qualifiers);
+
+        // Handle RDF Description
+        if self.is_description_element(&name) {
+            *description_depth += 1;
+            self.handle_description_attributes(&attrs, root, current_qualifiers)?;
+        }
+        // Handle RDF containers (Seq, Bag, Alt)
+        else if *description_depth > 0 && self.is_array_container(&name) {
+            if let Some(frame) = stack.last_mut() {
+                let parent = &mut frame.node;
+                use crate::core::node::{ArrayNode, ArrayType};
+                let array_type = if name.contains("Seq") {
+                    ArrayType::Ordered
+                } else if name.contains("Bag") {
+                    ArrayType::Unordered
+                } else {
+                    ArrayType::Alternative
+                };
+                let mut array_node = ArrayNode::new(array_type);
+                // Preserve any qualifiers from the parent (e.g. from attributes)
+                match parent {
+                    Node::Simple(sn) => {
+                        array_node.qualifiers = std::mem::take(&mut sn.qualifiers);
+                    }
+                    Node::Structure(sn) => {
+                        array_node.qualifiers = std::mem::take(&mut sn.qualifiers);
+                    }
+                    Node::Array(sn) => {
+                        array_node.qualifiers = std::mem::take(&mut sn.qualifiers);
+                    }
+                }
+                *parent = Node::Array(array_node);
+            }
+        }
+        // Handle li (list item) - add to current array
+        else if *description_depth > 0 && self.is_li_element(&name) {
+            let mut node = Node::simple("");
+            if let Node::Simple(sn) = &mut node {
+                sn.qualifiers.extend(current_qualifiers.clone());
+            }
+            self.populate_node_from_attributes(&attrs, &mut node, current_qualifiers)?;
+            stack.push(StackFrame {
+                key: "".to_string(),
+                node,
+                accumulated_text: String::new(),
+            });
+        } else if *description_depth > 0 && !self.is_rdf_element(&name) {
+            let colon_pos = name.find(':');
+            let key = if let Some(pos) = colon_pos {
+                let prefix = &name[..pos];
+                let prop_name = &name[pos + 1..];
+                if let Some(ns_uri) = self.namespaces.get_uri(prefix) {
+                    format!("{}:{}", ns_uri, prop_name)
+                } else {
+                    name.clone()
+                }
+            } else {
+                name.clone()
+            };
+
+            let has_parse_type_resource = attrs
+                .iter()
+                .any(|(k, v)| k == "rdf:parseType" && v == "Resource");
+            let mut node = if has_parse_type_resource {
+                Node::structure()
+            } else {
+                Node::simple("")
+            };
+            match &mut node {
+                Node::Simple(sn) => sn.qualifiers.extend(current_qualifiers.clone()),
+                Node::Structure(sn) => sn.qualifiers.extend(current_qualifiers.clone()),
+                Node::Array(sn) => sn.qualifiers.extend(current_qualifiers.clone()),
+            }
+            self.populate_node_from_attributes(&attrs, &mut node, current_qualifiers)?;
+            stack.push(StackFrame {
+                key,
+                node,
+                accumulated_text: String::new(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Handle End element event during RDF parsing
+    fn handle_end_element(
+        &self,
+        e: &quick_xml::events::BytesEnd<'_>,
+        root: &mut StructureNode,
+        stack: &mut Vec<StackFrame>,
+        description_depth: &mut usize,
+    ) -> XmpResult<()> {
+        let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+
+        if self.is_description_element(&name) {
+            *description_depth = description_depth.saturating_sub(1);
+        } else if *description_depth > 0
+            && !self.is_array_container(&name)
+            && !self.is_rdf_element(&name)
+        {
+            if let Some(frame) = stack.pop() {
+                let StackFrame {
+                    key,
+                    mut node,
+                    accumulated_text,
+                } = frame;
+                if let Node::Simple(ref mut simple) = node {
+                    if !accumulated_text.is_empty() {
+                        let text = match unescape(&accumulated_text) {
+                            Ok(unescaped) => unescaped.to_string(),
+                            Err(_) => accumulated_text.to_string(),
+                        };
+                        simple.value = text.trim().to_string();
+                    }
+                }
+                Self::insert_node_into_parent(root, stack, key, node);
+            }
+        }
+        Ok(())
+    }
+
+    /// Handle Empty element event during RDF parsing
+    fn handle_empty_element(
+        &mut self,
+        e: &quick_xml::events::BytesStart<'_>,
+        root: &mut StructureNode,
+        stack: &mut [StackFrame],
+        current_qualifiers: &mut Vec<Qualifier>,
+        description_depth: usize,
+    ) -> XmpResult<()> {
+        let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+        let attrs = Self::collect_attributes_empty(e);
+        self.process_attributes(&attrs, current_qualifiers);
+
+        // Handle RDF Description
+        if self.is_description_element(&name) {
+            self.handle_description_attributes(&attrs, root, current_qualifiers)?;
+        } else if description_depth > 0 && !self.is_rdf_element(&name) {
+            let colon_pos = name.find(':');
+            let key = if let Some(pos) = colon_pos {
+                let prefix = &name[..pos];
+                let prop_name = &name[pos + 1..];
+                if let Some(ns_uri) = self.namespaces.get_uri(prefix) {
+                    format!("{}:{}", ns_uri, prop_name)
+                } else {
+                    name.clone()
+                }
+            } else {
+                name.clone()
+            };
+
+            let mut node = Node::simple("");
+            if let Node::Simple(sn) = &mut node {
+                sn.qualifiers.extend(current_qualifiers.clone());
+            }
+            self.populate_node_from_attributes(&attrs, &mut node, current_qualifiers)?;
+
+            if name == "li" || name.ends_with(":li") {
+                Self::insert_node_into_parent(root, stack, "".to_string(), node);
+            } else {
+                Self::insert_node_into_parent(root, stack, key, node);
+            }
+        }
+        Ok(())
     }
 
     /// Process collected attributes: extract namespaces and qualifiers
