@@ -31,19 +31,15 @@ fn read_xmp_from_file() -> Result<(), Box<dyn std::error::Error>> {
 
     // Display the simple property "CreatorTool" by providing
     // the namespace URI and the name of the property.
-    if let Some(creator_tool) = xmp.get_property(ns::XMP, "CreatorTool") {
-        if let XmpValue::String(value) = creator_tool {
-            println!("CreatorTool = {}", value);
-        }
+    if let Some(XmpValue::String(value)) = xmp.get_property(ns::XMP, "CreatorTool") {
+        println!("CreatorTool = {}", value);
     }
 
     // Display the first element of the `creator` array.
     if let Some(size) = xmp.get_array_size(ns::DC, "creator") {
         if size > 0 {
-            if let Some(first_creator) = xmp.get_array_item(ns::DC, "creator", 0) {
-                if let XmpValue::String(value) = first_creator {
-                    println!("dc:creator = {}", value);
-                }
+            if let Some(XmpValue::String(value)) = xmp.get_array_item(ns::DC, "creator", 0) {
+                println!("dc:creator = {}", value);
             }
         } else {
             println!("No creator found");
@@ -57,10 +53,8 @@ fn read_xmp_from_file() -> Result<(), Box<dyn std::error::Error>> {
     // instead follows Rust's convention of being 0-based.
     if let Some(size) = xmp.get_array_size(ns::DC, "subject") {
         for index in 0..size {
-            if let Some(subject) = xmp.get_array_item(ns::DC, "subject", index) {
-                if let XmpValue::String(value) = subject {
-                    println!("dc:subject[{}] = {}", index, value);
-                }
+            if let Some(XmpValue::String(value)) = xmp.get_array_item(ns::DC, "subject", index) {
+                println!("dc:subject[{}] = {}", index, value);
             }
         }
     }
@@ -83,10 +77,8 @@ fn read_xmp_from_file() -> Result<(), Box<dyn std::error::Error>> {
 
     // Discover if the Exif Flash structure is available. If so, display the
     // flash status at the time the photograph was taken.
-    if let Some(value) = xmp.get_struct_field(ns::EXIF, "Flash", "Fired") {
-        if let XmpValue::String(s) = value {
-            println!("Flash Used = {}", s);
-        }
+    if let Some(XmpValue::String(s)) = xmp.get_struct_field(ns::EXIF, "Flash", "Fired") {
+        println!("Flash Used = {}", s);
     }
 
     Ok(())

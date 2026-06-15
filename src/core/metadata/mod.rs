@@ -1583,7 +1583,7 @@ mod tests {
         assert_eq!(retrieved_dt.hour, 10);
         assert_eq!(retrieved_dt.minute, 30);
         assert_eq!(retrieved_dt.second, 0);
-        assert_eq!(retrieved_dt.has_timezone, true);
+        assert!(retrieved_dt.has_timezone);
         assert_eq!(retrieved_dt.tz_sign, 0);
     }
 

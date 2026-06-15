@@ -518,8 +518,8 @@ mod tests {
         let dt = XmpDateTime::parse("2023").unwrap();
         assert_eq!(dt.year, 2023);
         assert_eq!(dt.month, 0);
-        assert_eq!(dt.has_date, true);
-        assert_eq!(dt.has_time, false);
+        assert!(dt.has_date);
+        assert!(!dt.has_time);
     }
 
     #[test]
@@ -536,7 +536,7 @@ mod tests {
         assert_eq!(dt.year, 2023);
         assert_eq!(dt.month, 12);
         assert_eq!(dt.day, 25);
-        assert_eq!(dt.has_time, false);
+        assert!(!dt.has_time);
     }
 
     #[test]
@@ -548,20 +548,20 @@ mod tests {
         assert_eq!(dt.hour, 10);
         assert_eq!(dt.minute, 30);
         assert_eq!(dt.second, 0);
-        assert_eq!(dt.has_time, true);
+        assert!(dt.has_time);
     }
 
     #[test]
     fn test_parse_with_timezone_utc() {
         let dt = XmpDateTime::parse("2023-12-25T10:30:00Z").unwrap();
-        assert_eq!(dt.has_timezone, true);
+        assert!(dt.has_timezone);
         assert_eq!(dt.tz_sign, 0);
     }
 
     #[test]
     fn test_parse_with_timezone_offset() {
         let dt = XmpDateTime::parse("2023-12-25T10:30:00+08:00").unwrap();
-        assert_eq!(dt.has_timezone, true);
+        assert!(dt.has_timezone);
         assert_eq!(dt.tz_sign, 1);
         assert_eq!(dt.tz_hour, 8);
         assert_eq!(dt.tz_minute, 0);

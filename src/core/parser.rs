@@ -409,7 +409,22 @@ impl XmpParser {
 
     /// Check if element name is a Description element
     fn is_description_element(&self, name: &str) -> bool {
-        name == "Description" || name.ends_with(":Description")
+        let colon_pos = name.find(':');
+        let (prefix, local_name) = if let Some(pos) = colon_pos {
+            (&name[..pos], &name[pos + 1..])
+        } else {
+            ("", name)
+        };
+
+        if local_name != "Description" {
+            return false;
+        }
+
+        if let Some(ns_uri) = self.namespaces.get_uri(prefix) {
+            ns_uri == crate::core::namespace::ns::RDF
+        } else {
+            prefix == "rdf" || (prefix.is_empty() && name == "Description")
+        }
     }
 
     /// Check if element name is an array container (Seq, Bag, Alt)
