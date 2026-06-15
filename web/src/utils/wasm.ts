@@ -1,7 +1,7 @@
 import init, {
   XmpFile,
   XmpMeta,
-  ReadOptions,
+  XmpOptions,
   Namespace,
   namespace_uri,
   register_namespace,
@@ -33,7 +33,7 @@ export async function initWasm() {
 export {
   XmpFile,
   XmpMeta,
-  ReadOptions,
+  XmpOptions,
   Namespace,
   namespace_uri,
   register_namespace,
@@ -43,4 +43,3 @@ export {
   get_all_registered_namespaces,
   get_builtin_namespace_uris
 }
-
