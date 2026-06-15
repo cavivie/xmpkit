@@ -27,7 +27,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 
 use quick_xml::escape::unescape;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
-use quick_xml::{Reader, Writer};
+use quick_xml::{Reader, Writer, XmlVersion};
 
 use crate::core::XmpMeta;
 use crate::files::handler::FileHandler;
@@ -88,7 +88,7 @@ impl FileHandler for SvgHandler {
 
                     // Check for SVG namespace in attributes
                     for attr in e.attributes().flatten() {
-                        if let Ok(value) = attr.unescape_value() {
+                        if let Ok(value) = attr.normalized_value(XmlVersion::Implicit1_0) {
                             if value.as_ref() == SVG_NAMESPACE {
                                 return Ok(true);
                             }
@@ -405,7 +405,7 @@ fn reconstruct_element(e: &BytesStart) -> String {
         result.push(' ');
         result.push_str(std::str::from_utf8(attr.key.as_ref()).unwrap_or(""));
         result.push_str("=\"");
-        if let Ok(value) = attr.unescape_value() {
+        if let Ok(value) = attr.normalized_value(XmlVersion::Implicit1_0) {
             // Escape the value for XML
             for c in value.chars() {
                 match c {
