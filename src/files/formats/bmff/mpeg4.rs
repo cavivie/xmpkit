@@ -1917,15 +1917,13 @@ mod native_reconcile {
                             meta.set_property(ns::XMP, "CreatorTool", item.value.clone().into());
                     }
                 }
-                b if b == BOX_DES || b == BOX_LDES => {
+                b if (b == BOX_DES || b == BOX_LDES)
                     // desc/ldes -> dc:description
-                    if meta
+                    && meta
                         .get_localized_text(ns::DC, "description", lang, lang)
-                        .is_none()
-                    {
-                        let _ =
-                            meta.set_localized_text(ns::DC, "description", lang, lang, &item.value);
-                    }
+                        .is_none() =>
+                {
+                    let _ = meta.set_localized_text(ns::DC, "description", lang, lang, &item.value);
                 }
                 _ => {}
             }
