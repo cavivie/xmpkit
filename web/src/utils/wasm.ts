@@ -9,25 +9,25 @@ import init, {
   get_namespace_uri,
   is_namespace_registered,
   get_all_registered_namespaces,
-  get_builtin_namespace_uris
-} from '../../pkg/xmpkit.js'
+  get_builtin_namespace_uris,
+} from "../../pkg/xmpkit.js";
 
-let wasmInitialized = false
+let wasmInitialized = false;
 
 export async function initWasm() {
   if (!wasmInitialized) {
-    await init()
-    wasmInitialized = true
-    
+    await init();
+    wasmInitialized = true;
+
     // Register AIGC namespace by default
     try {
-      register_namespace('http://www.tc260.org.cn/ns/AIGC/1.0/', 'TC260')
+      register_namespace("http://www.tc260.org.cn/ns/AIGC/1.0/", "TC260");
     } catch (error) {
       // Namespace might already be registered, ignore error
-      console.log('AIGC namespace registration:', error)
+      console.log("AIGC namespace registration:", error);
     }
   }
-  return true
+  return true;
 }
 
 export {
@@ -41,5 +41,5 @@ export {
   get_namespace_uri,
   is_namespace_registered,
   get_all_registered_namespaces,
-  get_builtin_namespace_uris
-}
+  get_builtin_namespace_uris,
+};

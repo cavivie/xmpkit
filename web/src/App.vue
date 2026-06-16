@@ -4,11 +4,11 @@
       <div class="header-content">
         <div class="title-with-logo">
           <img :src="logoPath" alt="XMPKit" class="header-logo" />
-          <h1>{{ $t('common.title') }}</h1>
+          <h1>{{ $t("common.title") }}</h1>
         </div>
         <div class="header-actions">
-          <el-tooltip 
-            :content="localeTooltip" 
+          <el-tooltip
+            :content="localeTooltip"
             placement="bottom"
             :trigger="isMobile ? 'manual' : 'hover'"
             v-model:visible="localeTooltipVisible"
@@ -22,8 +22,8 @@
               class="locale-toggle-btn"
             />
           </el-tooltip>
-          <el-tooltip 
-            :content="themeTooltip" 
+          <el-tooltip
+            :content="themeTooltip"
             placement="bottom"
             :trigger="isMobile ? 'manual' : 'hover'"
             v-model:visible="themeTooltipVisible"
@@ -40,7 +40,7 @@
         </div>
       </div>
     </el-header>
-    
+
     <el-main>
       <!-- File Upload Area -->
       <el-card class="upload-card">
@@ -54,11 +54,11 @@
         >
           <el-icon class="el-icon--upload"><upload-filled /></el-icon>
           <div class="el-upload__text">
-            {{ $t('common.upload') }}
+            {{ $t("common.upload") }}
           </div>
           <template #tip>
             <div class="el-upload__tip">
-              {{ $t('common.uploadTip') }}
+              {{ $t("common.uploadTip") }}
             </div>
           </template>
         </el-upload>
@@ -67,59 +67,73 @@
       <!-- File Preview -->
       <el-card v-if="filePreview" class="preview-card">
         <template #header>
-          <span>{{ $t('common.filePreview') }}</span>
+          <span>{{ $t("common.filePreview") }}</span>
         </template>
         <div class="preview-container">
-          <img v-if="filePreview.type.startsWith('image/')" :src="filePreview.url" :alt="filePreview.name" />
-          <video v-else-if="filePreview.type.startsWith('video/')" :src="filePreview.url" controls />
-          <audio v-else-if="filePreview.type.startsWith('audio/')" :src="filePreview.url" controls />
+          <img
+            v-if="filePreview.type.startsWith('image/')"
+            :src="filePreview.url"
+            :alt="filePreview.name"
+          />
+          <video
+            v-else-if="filePreview.type.startsWith('video/')"
+            :src="filePreview.url"
+            controls
+          />
+          <audio
+            v-else-if="filePreview.type.startsWith('audio/')"
+            :src="filePreview.url"
+            controls
+          />
           <div v-else class="file-placeholder">
             <p>📄 {{ filePreview.name }}</p>
-            <p class="file-placeholder-tip">{{ $t('common.noPreview') }}</p>
+            <p class="file-placeholder-tip">{{ $t("common.noPreview") }}</p>
           </div>
         </div>
-        <el-descriptions :column="1" border style="margin-top: 20px;">
-          <el-descriptions-item :label="$t('common.fileName')">{{ filePreview.name }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('common.fileSize')">{{ filePreview.size }} KB</el-descriptions-item>
-          <el-descriptions-item :label="$t('common.fileType')">{{ filePreview.type }}</el-descriptions-item>
+        <el-descriptions :column="1" border style="margin-top: 20px">
+          <el-descriptions-item :label="$t('common.fileName')">{{
+            filePreview.name
+          }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('common.fileSize')"
+            >{{ filePreview.size }} KB</el-descriptions-item
+          >
+          <el-descriptions-item :label="$t('common.fileType')">{{
+            filePreview.type
+          }}</el-descriptions-item>
         </el-descriptions>
       </el-card>
 
       <!-- Operation Buttons -->
       <el-card v-if="xmpFile" class="controls-card">
         <template #header>
-          <span>{{ $t('common.operations') }}</span>
+          <span>{{ $t("common.operations") }}</span>
         </template>
         <el-button type="primary" @click="readXmp">
           <el-icon><document /></el-icon>
-          {{ $t('common.readXmp') }}
+          {{ $t("common.readXmp") }}
         </el-button>
         <el-button type="success" @click="downloadModifiedFile">
           <el-icon><download /></el-icon>
-          {{ $t('common.downloadModified') }}
+          {{ $t("common.downloadModified") }}
         </el-button>
         <el-button type="info" @click="revertToOriginal">
           <el-icon><refresh-left /></el-icon>
-          {{ $t('common.revert') }}
+          {{ $t("common.revert") }}
         </el-button>
         <el-button type="warning" @click="reset">
           <el-icon><delete /></el-icon>
-          {{ $t('common.reset') }}
+          {{ $t("common.reset") }}
         </el-button>
       </el-card>
 
       <!-- XMP Properties Display -->
       <el-card v-if="xmpFile" class="xmp-card">
         <template #header>
-          <span>{{ $t('common.xmpProperties') }}</span>
+          <span>{{ $t("common.xmpProperties") }}</span>
         </template>
         <el-empty v-if="!xmpProperties.length" :description="$t('common.noProperties')" />
         <el-descriptions v-else :column="1" border>
-          <el-descriptions-item
-            v-for="prop in xmpProperties"
-            :key="prop.label"
-            :label="prop.label"
-          >
+          <el-descriptions-item v-for="prop in xmpProperties" :key="prop.label" :label="prop.label">
             {{ prop.value }}
           </el-descriptions-item>
         </el-descriptions>
@@ -129,52 +143,52 @@
       <el-collapse v-model="namespaceCollapseActiveNames" class="namespace-card">
         <el-collapse-item name="namespace-management" :title="$t('common.namespaceManagement')">
           <el-form :inline="true" @submit.prevent="handleRegisterNamespace" class="namespace-form">
-          <el-form-item :label="$t('common.namespaceUri')">
-            <el-input
-              v-model="namespaceForm.uri"
-              :placeholder="$t('common.namespaceUri')"
-              class="namespace-uri-input"
-            />
-          </el-form-item>
-          <el-form-item :label="$t('common.namespacePrefix')">
-            <el-input
-              v-model="namespaceForm.prefix"
-              :placeholder="$t('common.namespacePrefix')"
-              class="namespace-prefix-input"
-            />
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" @click="handleRegisterNamespace">
-              <el-icon><plus /></el-icon>
-              {{ $t('common.registerNamespace') }}
-            </el-button>
-          </el-form-item>
-        </el-form>
-        
-        <el-divider />
-        
-        <div class="namespace-table-header">
-          <span>{{ $t('common.registeredNamespaces') }} ({{ registeredNamespaces.length }})</span>
-        </div>
-        <el-table :data="registeredNamespaces" stripe style="width: 100%">
-          <el-table-column prop="prefix" :label="$t('common.namespacePrefix')" width="150">
-            <template #default="{ row }">
-              <el-tag type="primary">{{ row.prefix }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="uri" :label="$t('common.namespaceUri')">
-            <template #default="{ row }">
-              <code class="namespace-uri">{{ row.uri }}</code>
-            </template>
-          </el-table-column>
-        </el-table>
+            <el-form-item :label="$t('common.namespaceUri')">
+              <el-input
+                v-model="namespaceForm.uri"
+                :placeholder="$t('common.namespaceUri')"
+                class="namespace-uri-input"
+              />
+            </el-form-item>
+            <el-form-item :label="$t('common.namespacePrefix')">
+              <el-input
+                v-model="namespaceForm.prefix"
+                :placeholder="$t('common.namespacePrefix')"
+                class="namespace-prefix-input"
+              />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="handleRegisterNamespace">
+                <el-icon><plus /></el-icon>
+                {{ $t("common.registerNamespace") }}
+              </el-button>
+            </el-form-item>
+          </el-form>
+
+          <el-divider />
+
+          <div class="namespace-table-header">
+            <span>{{ $t("common.registeredNamespaces") }} ({{ registeredNamespaces.length }})</span>
+          </div>
+          <el-table :data="registeredNamespaces" stripe style="width: 100%">
+            <el-table-column prop="prefix" :label="$t('common.namespacePrefix')" width="150">
+              <template #default="{ row }">
+                <el-tag type="primary">{{ row.prefix }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="uri" :label="$t('common.namespaceUri')">
+              <template #default="{ row }">
+                <code class="namespace-uri">{{ row.uri }}</code>
+              </template>
+            </el-table-column>
+          </el-table>
         </el-collapse-item>
       </el-collapse>
 
       <!-- Edit Properties -->
       <el-card v-if="xmpFile" class="edit-card">
         <template #header>
-          <span>{{ $t('common.editProperties') }}</span>
+          <span>{{ $t("common.editProperties") }}</span>
         </template>
         <el-form :model="propertyForm" label-width="120px">
           <el-form-item :label="$t('common.namespaceUri')">
@@ -217,9 +231,11 @@
           </el-form-item>
           <el-form-item :label="$t('common.propertyName')">
             <template #label>
-              <span>{{ $t('common.propertyName') }}</span>
+              <span>{{ $t("common.propertyName") }}</span>
               <el-tooltip :content="$t('common.propertyNameTip')" placement="top">
-                <el-icon style="margin-left: 4px; color: #909399; cursor: help;"><question-filled /></el-icon>
+                <el-icon style="margin-left: 4px; color: #909399; cursor: help"
+                  ><question-filled
+                /></el-icon>
               </el-tooltip>
             </template>
             <el-select
@@ -239,18 +255,23 @@
                 <span style="float: right; color: #8492a6; font-size: 13px">{{ prop.name }}</span>
               </el-option>
             </el-select>
-            <div v-if="commonPropertyNames.length > 0" style="margin-top: 4px; font-size: 12px; color: #909399;">
-              {{ $t('common.availableProperties', { count: commonPropertyNames.length }) }}
+            <div
+              v-if="commonPropertyNames.length > 0"
+              style="margin-top: 4px; font-size: 12px; color: #909399"
+            >
+              {{ $t("common.availableProperties", { count: commonPropertyNames.length }) }}
             </div>
-            <div v-else style="margin-top: 4px; font-size: 12px; color: #909399;">
-              {{ $t('common.noCommonProperties') }}
+            <div v-else style="margin-top: 4px; font-size: 12px; color: #909399">
+              {{ $t("common.noCommonProperties") }}
             </div>
           </el-form-item>
           <el-form-item :label="$t('common.propertyValue')">
             <template #label>
-              <span>{{ $t('common.propertyValue') }}</span>
+              <span>{{ $t("common.propertyValue") }}</span>
               <el-tooltip :content="$t('common.propertyValueTip')" placement="top">
-                <el-icon style="margin-left: 4px; color: #909399; cursor: help;"><question-filled /></el-icon>
+                <el-icon style="margin-left: 4px; color: #909399; cursor: help"
+                  ><question-filled
+                /></el-icon>
               </el-tooltip>
             </template>
             <el-input
@@ -263,11 +284,11 @@
           <el-form-item class="edit-buttons">
             <el-button type="primary" @click="handleSetProperty">
               <el-icon><check /></el-icon>
-              {{ $t('common.setProperty') }}
+              {{ $t("common.setProperty") }}
             </el-button>
             <el-button type="danger" @click="handleDeleteProperty">
               <el-icon><delete /></el-icon>
-              {{ $t('common.deleteProperty') }}
+              {{ $t("common.deleteProperty") }}
             </el-button>
           </el-form-item>
         </el-form>
@@ -276,7 +297,7 @@
       <!-- Raw XMP Packet -->
       <el-card v-if="xmpPacket" class="packet-card">
         <template #header>
-          <span>{{ $t('common.rawXmpPacket') }}</span>
+          <span>{{ $t("common.rawXmpPacket") }}</span>
         </template>
         <el-scrollbar height="400px">
           <pre class="xmp-packet">{{ xmpPacket }}</pre>
@@ -287,8 +308,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { ref, reactive, computed, watch, onMounted, nextTick } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   UploadFilled,
   Document,
@@ -301,53 +322,53 @@ import {
   Sunny,
   Moon,
   Monitor,
-  Switch
-} from '@element-plus/icons-vue'
-import { useXmp } from './composables/useXmp'
-import { initWasm } from './utils/wasm'
+  Switch,
+} from "@element-plus/icons-vue";
+import { useXmp } from "./composables/useXmp";
+import { initWasm } from "./utils/wasm";
 
-const { locale, t } = useI18n()
-const uploadRef = ref()
-const namespaceCollapseActiveNames = ref<string[]>([]) // Empty array means collapsed by default
-const theme = ref<'auto' | 'light' | 'dark'>('auto')
+const { locale, t } = useI18n();
+const uploadRef = ref();
+const namespaceCollapseActiveNames = ref<string[]>([]); // Empty array means collapsed by default
+const theme = ref<"auto" | "light" | "dark">("auto");
 
 // Detect mobile device
-const isMobile = ref(false)
-const localeTooltipVisible = ref(false)
-const themeTooltipVisible = ref(false)
+const isMobile = ref(false);
+const localeTooltipVisible = ref(false);
+const themeTooltipVisible = ref(false);
 
 const updateIsMobile = () => {
-  if (typeof window !== 'undefined') {
-    isMobile.value = window.innerWidth <= 768
+  if (typeof window !== "undefined") {
+    isMobile.value = window.innerWidth <= 768;
   }
-}
+};
 
 const handleLocaleClick = () => {
-  toggleLocale()
+  toggleLocale();
   if (isMobile.value) {
-    localeTooltipVisible.value = true
+    localeTooltipVisible.value = true;
     setTimeout(() => {
-      localeTooltipVisible.value = false
-    }, 1000)
+      localeTooltipVisible.value = false;
+    }, 1000);
   }
-}
+};
 
 const handleThemeClick = () => {
-  toggleTheme()
+  toggleTheme();
   if (isMobile.value) {
-    themeTooltipVisible.value = true
+    themeTooltipVisible.value = true;
     setTimeout(() => {
-      themeTooltipVisible.value = false
-    }, 1000)
+      themeTooltipVisible.value = false;
+    }, 1000);
   }
-}
+};
 
 const filePreview = ref<{
-  name: string
-  size: string
-  type: string
-  url: string
-} | null>(null)
+  name: string;
+  size: string;
+  type: string;
+  url: string;
+} | null>(null);
 
 const {
   xmpFile,
@@ -365,416 +386,430 @@ const {
   reset,
   updateRegisteredNamespaces,
   getPropertyValue,
-} = useXmp()
+} = useXmp();
 
 const namespaceForm = reactive({
-  uri: '',
-  prefix: ''
-})
+  uri: "",
+  prefix: "",
+});
 
 const propertyForm = reactive({
-  namespace: '',
-  property: '',
-  value: ''
-})
+  namespace: "",
+  property: "",
+  value: "",
+});
 
 // Separate custom and built-in namespaces
 const customNamespaces = computed(() => {
-  return registeredNamespaces.value.filter(ns => !builtinNamespaceUris.value.includes(ns.uri))
-})
+  return registeredNamespaces.value.filter((ns) => !builtinNamespaceUris.value.includes(ns.uri));
+});
 
 const builtinNamespaces = computed(() => {
-  return registeredNamespaces.value.filter(ns => builtinNamespaceUris.value.includes(ns.uri))
-})
+  return registeredNamespaces.value.filter((ns) => builtinNamespaceUris.value.includes(ns.uri));
+});
 
 // Common property names for different namespaces
 const commonPropertyNames = computed(() => {
-  const namespaceUri = propertyForm.namespace
-  
+  const namespaceUri = propertyForm.namespace;
+
   // XMP Basic namespace
-  if (namespaceUri === 'http://ns.adobe.com/xap/1.0/') {
+  if (namespaceUri === "http://ns.adobe.com/xap/1.0/") {
     return [
-      { name: 'CreatorTool', label: 'CreatorTool' },
-      { name: 'CreateDate', label: 'CreateDate' },
-      { name: 'ModifyDate', label: 'ModifyDate' },
-      { name: 'MetadataDate', label: 'MetadataDate' },
-      { name: 'Identifier', label: 'Identifier' },
-      { name: 'Nickname', label: 'Nickname' },
-      { name: 'Rating', label: 'Rating' },
-      { name: 'Label', label: 'Label' },
-    ]
+      { name: "CreatorTool", label: "CreatorTool" },
+      { name: "CreateDate", label: "CreateDate" },
+      { name: "ModifyDate", label: "ModifyDate" },
+      { name: "MetadataDate", label: "MetadataDate" },
+      { name: "Identifier", label: "Identifier" },
+      { name: "Nickname", label: "Nickname" },
+      { name: "Rating", label: "Rating" },
+      { name: "Label", label: "Label" },
+    ];
   }
-  
+
   // Dublin Core namespace
-  if (namespaceUri === 'http://purl.org/dc/elements/1.1/') {
+  if (namespaceUri === "http://purl.org/dc/elements/1.1/") {
     return [
-      { name: 'title', label: 'Title' },
-      { name: 'creator', label: 'Creator' },
-      { name: 'subject', label: 'Subject' },
-      { name: 'description', label: 'Description' },
-      { name: 'publisher', label: 'Publisher' },
-      { name: 'contributor', label: 'Contributor' },
-      { name: 'date', label: 'Date' },
-      { name: 'type', label: 'Type' },
-      { name: 'format', label: 'Format' },
-      { name: 'identifier', label: 'Identifier' },
-      { name: 'source', label: 'Source' },
-      { name: 'language', label: 'Language' },
-      { name: 'relation', label: 'Relation' },
-      { name: 'coverage', label: 'Coverage' },
-      { name: 'rights', label: 'Rights' },
-    ]
+      { name: "title", label: "Title" },
+      { name: "creator", label: "Creator" },
+      { name: "subject", label: "Subject" },
+      { name: "description", label: "Description" },
+      { name: "publisher", label: "Publisher" },
+      { name: "contributor", label: "Contributor" },
+      { name: "date", label: "Date" },
+      { name: "type", label: "Type" },
+      { name: "format", label: "Format" },
+      { name: "identifier", label: "Identifier" },
+      { name: "source", label: "Source" },
+      { name: "language", label: "Language" },
+      { name: "relation", label: "Relation" },
+      { name: "coverage", label: "Coverage" },
+      { name: "rights", label: "Rights" },
+    ];
   }
-  
+
   // EXIF namespace
-  if (namespaceUri === 'http://ns.adobe.com/exif/1.0/') {
+  if (namespaceUri === "http://ns.adobe.com/exif/1.0/") {
     return [
-      { name: 'ExifVersion', label: 'ExifVersion' },
-      { name: 'ColorSpace', label: 'ColorSpace' },
-      { name: 'PixelXDimension', label: 'PixelXDimension' },
-      { name: 'PixelYDimension', label: 'PixelYDimension' },
-      { name: 'DateTimeOriginal', label: 'DateTimeOriginal' },
-      { name: 'DateTimeDigitized', label: 'DateTimeDigitized' },
-      { name: 'ExposureTime', label: 'ExposureTime' },
-      { name: 'FNumber', label: 'FNumber' },
-      { name: 'ExposureProgram', label: 'ExposureProgram' },
-      { name: 'ISOSpeedRatings', label: 'ISOSpeedRatings' },
-    ]
+      { name: "ExifVersion", label: "ExifVersion" },
+      { name: "ColorSpace", label: "ColorSpace" },
+      { name: "PixelXDimension", label: "PixelXDimension" },
+      { name: "PixelYDimension", label: "PixelYDimension" },
+      { name: "DateTimeOriginal", label: "DateTimeOriginal" },
+      { name: "DateTimeDigitized", label: "DateTimeDigitized" },
+      { name: "ExposureTime", label: "ExposureTime" },
+      { name: "FNumber", label: "FNumber" },
+      { name: "ExposureProgram", label: "ExposureProgram" },
+      { name: "ISOSpeedRatings", label: "ISOSpeedRatings" },
+    ];
   }
-  
+
   // AIGC namespace
-  if (namespaceUri === 'http://www.tc260.org.cn/ns/AIGC/1.0/') {
-    return [
-      { name: 'AIGC', label: 'AIGC (AI Generated Content)' },
-    ]
+  if (namespaceUri === "http://www.tc260.org.cn/ns/AIGC/1.0/") {
+    return [{ name: "AIGC", label: "AIGC (AI Generated Content)" }];
   }
-  
+
   // XMP Rights namespace
-  if (namespaceUri === 'http://ns.adobe.com/xap/1.0/rights/') {
+  if (namespaceUri === "http://ns.adobe.com/xap/1.0/rights/") {
     return [
-      { name: 'Marked', label: 'Marked' },
-      { name: 'WebStatement', label: 'WebStatement' },
-      { name: 'UsageTerms', label: 'UsageTerms' },
-      { name: 'Certificate', label: 'Certificate' },
-      { name: 'Owner', label: 'Owner' },
-    ]
+      { name: "Marked", label: "Marked" },
+      { name: "WebStatement", label: "WebStatement" },
+      { name: "UsageTerms", label: "UsageTerms" },
+      { name: "Certificate", label: "Certificate" },
+      { name: "Owner", label: "Owner" },
+    ];
   }
-  
+
   // XMP Media Management namespace
-  if (namespaceUri === 'http://ns.adobe.com/xap/1.0/mm/') {
+  if (namespaceUri === "http://ns.adobe.com/xap/1.0/mm/") {
     return [
-      { name: 'DocumentID', label: 'DocumentID' },
-      { name: 'InstanceID', label: 'InstanceID' },
-      { name: 'OriginalDocumentID', label: 'OriginalDocumentID' },
-      { name: 'History', label: 'History' },
-      { name: 'DerivedFrom', label: 'DerivedFrom' },
-    ]
+      { name: "DocumentID", label: "DocumentID" },
+      { name: "InstanceID", label: "InstanceID" },
+      { name: "OriginalDocumentID", label: "OriginalDocumentID" },
+      { name: "History", label: "History" },
+      { name: "DerivedFrom", label: "DerivedFrom" },
+    ];
   }
-  
+
   // Photoshop namespace
-  if (namespaceUri === 'http://ns.adobe.com/photoshop/1.0/') {
+  if (namespaceUri === "http://ns.adobe.com/photoshop/1.0/") {
     return [
-      { name: 'AuthorsPosition', label: 'AuthorsPosition' },
-      { name: 'CaptionWriter', label: 'CaptionWriter' },
-      { name: 'Category', label: 'Category' },
-      { name: 'City', label: 'City' },
-      { name: 'Country', label: 'Country' },
-      { name: 'Credit', label: 'Credit' },
-      { name: 'DateCreated', label: 'DateCreated' },
-      { name: 'Headline', label: 'Headline' },
-      { name: 'Instructions', label: 'Instructions' },
-      { name: 'Source', label: 'Source' },
-      { name: 'State', label: 'State' },
-      { name: 'TransmissionReference', label: 'TransmissionReference' },
-      { name: 'Urgency', label: 'Urgency' },
-    ]
+      { name: "AuthorsPosition", label: "AuthorsPosition" },
+      { name: "CaptionWriter", label: "CaptionWriter" },
+      { name: "Category", label: "Category" },
+      { name: "City", label: "City" },
+      { name: "Country", label: "Country" },
+      { name: "Credit", label: "Credit" },
+      { name: "DateCreated", label: "DateCreated" },
+      { name: "Headline", label: "Headline" },
+      { name: "Instructions", label: "Instructions" },
+      { name: "Source", label: "Source" },
+      { name: "State", label: "State" },
+      { name: "TransmissionReference", label: "TransmissionReference" },
+      { name: "Urgency", label: "Urgency" },
+    ];
   }
-  
+
   // TIFF namespace
-  if (namespaceUri === 'http://ns.adobe.com/tiff/1.0/') {
+  if (namespaceUri === "http://ns.adobe.com/tiff/1.0/") {
     return [
-      { name: 'ImageWidth', label: 'ImageWidth' },
-      { name: 'ImageLength', label: 'ImageLength' },
-      { name: 'BitsPerSample', label: 'BitsPerSample' },
-      { name: 'Compression', label: 'Compression' },
-      { name: 'PhotometricInterpretation', label: 'PhotometricInterpretation' },
-      { name: 'Orientation', label: 'Orientation' },
-      { name: 'SamplesPerPixel', label: 'SamplesPerPixel' },
-      { name: 'PlanarConfiguration', label: 'PlanarConfiguration' },
-      { name: 'ResolutionUnit', label: 'ResolutionUnit' },
-      { name: 'XResolution', label: 'XResolution' },
-      { name: 'YResolution', label: 'YResolution' },
-    ]
+      { name: "ImageWidth", label: "ImageWidth" },
+      { name: "ImageLength", label: "ImageLength" },
+      { name: "BitsPerSample", label: "BitsPerSample" },
+      { name: "Compression", label: "Compression" },
+      { name: "PhotometricInterpretation", label: "PhotometricInterpretation" },
+      { name: "Orientation", label: "Orientation" },
+      { name: "SamplesPerPixel", label: "SamplesPerPixel" },
+      { name: "PlanarConfiguration", label: "PlanarConfiguration" },
+      { name: "ResolutionUnit", label: "ResolutionUnit" },
+      { name: "XResolution", label: "XResolution" },
+      { name: "YResolution", label: "YResolution" },
+    ];
   }
-  
+
   // Empty list for unknown namespaces
-  return []
-})
+  return [];
+});
 
 const changeLocale = (val: string) => {
-  locale.value = val
-  localStorage.setItem('locale', val)
-}
+  locale.value = val;
+  localStorage.setItem("locale", val);
+};
 
 const toggleLocale = () => {
-  const newLocale = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'
-  changeLocale(newLocale)
-}
+  const newLocale = locale.value === "zh-CN" ? "en-US" : "zh-CN";
+  changeLocale(newLocale);
+};
 
 const localeIcon = computed(() => {
   // Use Switch icon for language switching
-  return Switch
-})
+  return Switch;
+});
 
 const localeTooltip = computed(() => {
-  return locale.value === 'zh-CN' ? 'Switch to English' : '切换到中文'
-})
+  return locale.value === "zh-CN" ? "Switch to English" : "切换到中文";
+});
 
 const toggleTheme = () => {
   // Cycle through: auto -> light -> dark -> auto
-  if (theme.value === 'auto') {
-    theme.value = 'light'
-  } else if (theme.value === 'light') {
-    theme.value = 'dark'
+  if (theme.value === "auto") {
+    theme.value = "light";
+  } else if (theme.value === "light") {
+    theme.value = "dark";
   } else {
-    theme.value = 'auto'
+    theme.value = "auto";
   }
-  localStorage.setItem('theme', theme.value)
-  applyTheme(theme.value)
-}
+  localStorage.setItem("theme", theme.value);
+  applyTheme(theme.value);
+};
 
-const applyTheme = (themeMode: 'auto' | 'light' | 'dark') => {
-  const html = document.documentElement
-  html.classList.remove('light', 'dark')
-  
-  if (themeMode === 'light') {
-    html.classList.add('light')
-  } else if (themeMode === 'dark') {
-    html.classList.add('dark')
+const applyTheme = (themeMode: "auto" | "light" | "dark") => {
+  const html = document.documentElement;
+  html.classList.remove("light", "dark");
+
+  if (themeMode === "light") {
+    html.classList.add("light");
+  } else if (themeMode === "dark") {
+    html.classList.add("dark");
   }
   // 'auto' means no class, will follow system preference
-}
+};
 
 // Computed properties for theme icon and tooltip
 const themeIcon = computed(() => {
-  if (theme.value === 'light') {
-    return Sunny
-  } else if (theme.value === 'dark') {
-    return Moon
+  if (theme.value === "light") {
+    return Sunny;
+  } else if (theme.value === "dark") {
+    return Moon;
   } else {
-    return Monitor
+    return Monitor;
   }
-})
+});
 
 const themeTooltip = computed(() => {
-  if (theme.value === 'light') {
-    return t('common.themeLight')
-  } else if (theme.value === 'dark') {
-    return t('common.themeDark')
+  if (theme.value === "light") {
+    return t("common.themeLight");
+  } else if (theme.value === "dark") {
+    return t("common.themeDark");
   } else {
-    return t('common.themeAuto')
+    return t("common.themeAuto");
   }
-})
+});
 
 // Computed property for logo path based on theme
 const logoPath = computed(() => {
-  const currentTheme = theme.value === 'auto' 
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : theme.value
-  
+  const currentTheme =
+    theme.value === "auto"
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light"
+      : theme.value;
+
   // Use light logo (dark colors) for light theme, and dark logo (bright colors) for dark theme
   // Use BASE_URL to support GitHub Pages subpath deployment
-  const baseUrl = import.meta.env.BASE_URL
-  return currentTheme === 'light' 
-    ? `${baseUrl}assets/logo-icon-light.svg` 
-    : `${baseUrl}assets/logo-icon.svg`
-})
+  const baseUrl = import.meta.env.BASE_URL;
+  return currentTheme === "light"
+    ? `${baseUrl}assets/logo-icon-light.svg`
+    : `${baseUrl}assets/logo-icon.svg`;
+});
 
 // Computed property for favicon path based on theme
 const faviconPath = computed(() => {
-  const currentTheme = theme.value === 'auto' 
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : theme.value
-  
+  const currentTheme =
+    theme.value === "auto"
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light"
+      : theme.value;
+
   // Use favicon with circular background optimized for browser tabs
   // Use BASE_URL to support GitHub Pages subpath deployment
-  const baseUrl = import.meta.env.BASE_URL
-  return currentTheme === 'light' 
-    ? `${baseUrl}assets/favicon-light.svg` 
-    : `${baseUrl}assets/favicon.svg`
-})
+  const baseUrl = import.meta.env.BASE_URL;
+  return currentTheme === "light"
+    ? `${baseUrl}assets/favicon-light.svg`
+    : `${baseUrl}assets/favicon.svg`;
+});
 
 // Function to update favicon based on theme
 const updateFavicon = (logoPath: string) => {
-  let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement
+  let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
   if (!link) {
-    link = document.createElement('link')
-    link.rel = 'icon'
-    const head = document.getElementsByTagName('head')[0]
+    link = document.createElement("link");
+    link.rel = "icon";
+    const head = document.getElementsByTagName("head")[0];
     if (head) {
-      head.appendChild(link)
+      head.appendChild(link);
     }
   }
-  link.href = logoPath
-}
+  link.href = logoPath;
+};
 
 // Watch theme changes and update favicon
-watch([theme, faviconPath], () => {
-  updateFavicon(faviconPath.value)
-}, { immediate: true })
+watch(
+  [theme, faviconPath],
+  () => {
+    updateFavicon(faviconPath.value);
+  },
+  { immediate: true },
+);
 
 const handleFileChange = async (file: { raw: File }) => {
-  const result = await loadFile(file.raw)
+  const result = await loadFile(file.raw);
   if (result) {
     filePreview.value = {
       name: result.fileName,
       size: (file.raw.size / 1024).toFixed(2),
-      type: file.raw.type || t('common.fileType'),
-      url: URL.createObjectURL(file.raw)
-    }
+      type: file.raw.type || t("common.fileType"),
+      url: URL.createObjectURL(file.raw),
+    };
     // Auto-load property value after file is loaded
     if (propertyForm.namespace && propertyForm.property) {
-      const value = getPropertyValue(propertyForm.namespace, propertyForm.property)
+      const value = getPropertyValue(propertyForm.namespace, propertyForm.property);
       if (value !== null) {
-        propertyForm.value = value
+        propertyForm.value = value;
       } else {
-        propertyForm.value = ''
+        propertyForm.value = "";
       }
     } else if (propertyForm.namespace && commonPropertyNames.value.length > 0) {
       // If namespace is set but property is not, select first property
-      const firstProperty = commonPropertyNames.value[0]
+      const firstProperty = commonPropertyNames.value[0];
       if (firstProperty) {
-        propertyForm.property = firstProperty.name
-        const value = getPropertyValue(propertyForm.namespace, firstProperty.name)
+        propertyForm.property = firstProperty.name;
+        const value = getPropertyValue(propertyForm.namespace, firstProperty.name);
         if (value !== null) {
-          propertyForm.value = value
+          propertyForm.value = value;
         }
       }
     }
   }
-}
+};
 
 const handleSetProperty = async () => {
   if (!propertyForm.namespace || !propertyForm.property) {
-    return
+    return;
   }
-  const currentNamespace = propertyForm.namespace
-  const currentProperty = propertyForm.property
-  
-  setProperty(propertyForm.namespace, propertyForm.property, propertyForm.value)
-  
+  const currentNamespace = propertyForm.namespace;
+  const currentProperty = propertyForm.property;
+
+  setProperty(propertyForm.namespace, propertyForm.property, propertyForm.value);
+
   // After setting property, reload the value (don't clear the form)
   // Use nextTick to ensure readXmp has completed and reactive updates are done
-  await nextTick()
+  await nextTick();
   // Small delay to ensure readXmp completes
   setTimeout(() => {
     if (propertyForm.namespace === currentNamespace && propertyForm.property === currentProperty) {
-      const value = getPropertyValue(currentNamespace, currentProperty)
+      const value = getPropertyValue(currentNamespace, currentProperty);
       if (value !== null) {
-        propertyForm.value = value
+        propertyForm.value = value;
       }
     }
-  }, 50)
-}
+  }, 50);
+};
 
 const handleDeleteProperty = () => {
-  deleteProperty(propertyForm.namespace, propertyForm.property)
-}
+  deleteProperty(propertyForm.namespace, propertyForm.property);
+};
 
 const handleRegisterNamespace = () => {
-  registerNamespace(namespaceForm.uri, namespaceForm.prefix)
-  namespaceForm.uri = ''
-  namespaceForm.prefix = ''
-}
+  registerNamespace(namespaceForm.uri, namespaceForm.prefix);
+  namespaceForm.uri = "";
+  namespaceForm.prefix = "";
+};
 
 // Watch namespace changes and auto-select first property with its value
-watch(() => propertyForm.namespace, (newNamespace) => {
-  if (newNamespace && commonPropertyNames.value.length > 0) {
-    // Select the first common property
-    const firstProperty = commonPropertyNames.value[0]
-    if (firstProperty) {
-      propertyForm.property = firstProperty.name
-      
-      // Try to load the property value if file is loaded
-      if (xmpFile.value) {
-        const value = getPropertyValue(newNamespace, firstProperty.name)
-        if (value !== null) {
-          propertyForm.value = value
-        } else {
-          propertyForm.value = ''
+watch(
+  () => propertyForm.namespace,
+  (newNamespace) => {
+    if (newNamespace && commonPropertyNames.value.length > 0) {
+      // Select the first common property
+      const firstProperty = commonPropertyNames.value[0];
+      if (firstProperty) {
+        propertyForm.property = firstProperty.name;
+
+        // Try to load the property value if file is loaded
+        if (xmpFile.value) {
+          const value = getPropertyValue(newNamespace, firstProperty.name);
+          if (value !== null) {
+            propertyForm.value = value;
+          } else {
+            propertyForm.value = "";
+          }
         }
       }
+    } else {
+      propertyForm.property = "";
+      propertyForm.value = "";
     }
-  } else {
-    propertyForm.property = ''
-    propertyForm.value = ''
-  }
-})
+  },
+);
 
 // Watch property changes and auto-load its value
-watch(() => propertyForm.property, (newProperty) => {
-  if (newProperty && propertyForm.namespace && xmpFile.value) {
-    const value = getPropertyValue(propertyForm.namespace, newProperty)
-    if (value !== null) {
-      propertyForm.value = value
-    } else {
-      propertyForm.value = ''
+watch(
+  () => propertyForm.property,
+  (newProperty) => {
+    if (newProperty && propertyForm.namespace && xmpFile.value) {
+      const value = getPropertyValue(propertyForm.namespace, newProperty);
+      if (value !== null) {
+        propertyForm.value = value;
+      } else {
+        propertyForm.value = "";
+      }
     }
-  }
-})
+  },
+);
 
 onMounted(async () => {
   // Initialize mobile detection
-  updateIsMobile()
-  window.addEventListener('resize', updateIsMobile)
-  
+  updateIsMobile();
+  window.addEventListener("resize", updateIsMobile);
+
   // Get theme from localStorage or use 'auto'
-  const savedTheme = localStorage.getItem('theme') as 'auto' | 'light' | 'dark' | null
-  if (savedTheme && ['auto', 'light', 'dark'].includes(savedTheme)) {
-    theme.value = savedTheme
+  const savedTheme = localStorage.getItem("theme") as "auto" | "light" | "dark" | null;
+  if (savedTheme && ["auto", "light", "dark"].includes(savedTheme)) {
+    theme.value = savedTheme;
   } else {
-    theme.value = 'auto'
+    theme.value = "auto";
   }
-  applyTheme(theme.value)
-  
+  applyTheme(theme.value);
+
   // Get locale from localStorage or use system default
-  const savedLocale = localStorage.getItem('locale')
+  const savedLocale = localStorage.getItem("locale");
   if (savedLocale) {
-    locale.value = savedLocale
+    locale.value = savedLocale;
   } else {
     // Use system language if no saved preference
-    const systemLang = navigator.language || navigator.languages?.[0] || 'en-US'
-    const detectedLocale = systemLang.startsWith('zh') ? 'zh-CN' : 'en-US'
-    locale.value = detectedLocale
-    localStorage.setItem('locale', detectedLocale)
+    const systemLang = navigator.language || navigator.languages?.[0] || "en-US";
+    const detectedLocale = systemLang.startsWith("zh") ? "zh-CN" : "en-US";
+    locale.value = detectedLocale;
+    localStorage.setItem("locale", detectedLocale);
   }
   // Initialize WASM and update namespace list
-  await initWasm()
-  updateRegisteredNamespaces()
-  
+  await initWasm();
+  updateRegisteredNamespaces();
+
   // Auto-select custom namespace first, then built-in
   if (!propertyForm.namespace) {
     if (customNamespaces.value.length > 0 && customNamespaces.value[0]) {
-      propertyForm.namespace = customNamespaces.value[0].uri
+      propertyForm.namespace = customNamespaces.value[0].uri;
     } else if (builtinNamespaces.value.length > 0 && builtinNamespaces.value[0]) {
-      propertyForm.namespace = builtinNamespaces.value[0].uri
+      propertyForm.namespace = builtinNamespaces.value[0].uri;
     }
   }
-  
+
   // Auto-select first property if namespace is set
   if (propertyForm.namespace && commonPropertyNames.value.length > 0) {
-    const firstProperty = commonPropertyNames.value[0]
+    const firstProperty = commonPropertyNames.value[0];
     if (firstProperty) {
-      propertyForm.property = firstProperty.name
+      propertyForm.property = firstProperty.name;
       if (xmpFile.value) {
-        const value = getPropertyValue(propertyForm.namespace, firstProperty.name)
+        const value = getPropertyValue(propertyForm.namespace, firstProperty.name);
         if (value !== null) {
-          propertyForm.value = value
+          propertyForm.value = value;
         }
       }
     }
   }
-})
+});
 </script>
 
 <style scoped>
@@ -912,7 +947,9 @@ onMounted(async () => {
 /* Upload tip text - improve visibility in dark mode */
 .upload-card :deep(.el-upload__tip) {
   color: var(--color-text);
-  transition: color 0.3s ease, opacity 0.3s ease;
+  transition:
+    color 0.3s ease,
+    opacity 0.3s ease;
 }
 
 :root.dark .upload-card :deep(.el-upload__tip) {
@@ -1005,12 +1042,14 @@ onMounted(async () => {
 }
 
 .namespace-uri {
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   font-size: 12px;
   color: var(--color-text);
   word-break: break-all;
   opacity: 0.8;
-  transition: color 0.3s ease, opacity 0.3s ease;
+  transition:
+    color 0.3s ease,
+    opacity 0.3s ease;
 }
 
 /* Improve visibility in dark mode */
@@ -1047,7 +1086,7 @@ onMounted(async () => {
   color: var(--color-text);
   border: 1px solid var(--color-border);
   transition: all 0.3s ease;
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
 }
 
 /* Enhanced button styles */
