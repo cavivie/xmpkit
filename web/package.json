@@ -3,19 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": "^20.19.0 || >=22.12.0"
-  },
   "scripts": {
     "build-wasm": "cd .. && wasm-pack build --target web --out-dir web/pkg --features wasm",
-    "dev": "npm run build-wasm && vite",
+    "dev": "npm run build-wasm && vp dev",
     "build": "npm run build-wasm && run-p type-check \"build-only {@}\" --",
-    "preview": "vite preview",
-    "test:unit": "vitest",
+    "preview": "vp preview",
+    "test:unit": "vp test",
     "test:e2e": "playwright test",
-    "build-only": "vite build",
+    "build-only": "vp build",
     "type-check": "vue-tsc --build",
-    "lint": "eslint . --fix --cache"
+    "lint": "vp lint . --fix"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -33,20 +30,26 @@
     "@types/node": "^24.10.2",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vitejs/plugin-vue-jsx": "^5.1.5",
-    "@vitest/eslint-plugin": "^1.6.20",
-    "@vue/eslint-config-typescript": "^14.8.0",
     "@vue/test-utils": "^2.4.11",
     "@vue/tsconfig": "^0.9.1",
-    "eslint": "^9.37.0",
     "eslint-plugin-playwright": "^2.10.4",
-    "eslint-plugin-vue": "~10.9.2",
     "jiti": "^2.7.0",
     "jsdom": "^27.3.0",
     "npm-run-all2": "^8.0.4",
     "typescript": "~5.9.0",
-    "vite": "^7.3.1",
+    "unplugin-element-plus": "^0.11.2",
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plugin-vue-devtools": "^8.1.3",
-    "vitest": "^4.1.9",
+    "vite-plus": "latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
     "vue-tsc": "^3.3.5"
-  }
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "packageManager": "npm@11.17.0"
 }
