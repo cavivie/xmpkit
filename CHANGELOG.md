@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/cavivie/xmpkit/compare/v0.1.3...v0.1.4) - 2026-06-16
+
+### Added
+
+- *(web)* migrate to Vite+
+
+### Fixed
+
+- *(svg)* adapt attribute normalization for quick-xml 0.40
+- *(web)* use exported wasm options type
+- *(core)* correct EXIF Aux prefix and add EXIF 2.32 Extension namespace
+- *(core)* support attributes-as-properties on nested elements and array items
+- *(core)* fix nested structure parsing and metadata bugs.
+
+### Other
+
+- add semantic PR title check
+- Fix RDF Description parsing and resolve clippy warnings
+- *(deps)* (deps): bump the vue-ecosystem group across 1 directory with 3 updates
+- *(deps)* (deps): update quick-xml requirement from 0.39 to 0.40
+- *(deps)* (deps): bump the other-dependencies group across 1 directory with 2 updates
+- *(deps)* (deps-dev): bump the testing group across 1 directory with 3 updates
+- *(deps)* (deps-dev): bump the build-tools group across 1 directory with 3 updates
+- *(deps)* (deps): update lopdf requirement from 0.40 to 0.41
+- *(deps)* (deps-dev): bump the linting group across 1 directory with 3 updates
+- Refactor RDF parser in parser.rs
+- *(core)* fix clippy and fmt lint warnings
+- *(ci)* (deps): bump actions/upload-pages-artifact from 3 to 5
+- *(deps)* (deps): bump the build-tools group in /web with 5 updates ([#82](https://github.com/cavivie/xmpkit/pull/82))
+- *(deps)* (deps-dev): bump the testing group across 1 directory with 3 updates ([#86](https://github.com/cavivie/xmpkit/pull/86))
+- *(deps)* (deps): bump the vue-ecosystem group in /web with 3 updates
+- *(ci)* (deps): bump actions/deploy-pages from 4 to 5
+- *(ci)* (deps): bump openharmony-rs/setup-ohos-sdk from 0.2 to 1.0
+- *(deps)* (deps-dev): bump the testing group in /web with 2 updates
+- *(deps)* (deps-dev): bump eslint-plugin-playwright
+- *(deps)* (deps): bump element-plus
+- *(ci)* (deps): bump actions/configure-pages from 5 to 6
+- *(deps)* (deps): update lopdf requirement from 0.39 to 0.40
+
 ## [0.1.3](https://github.com/cavivie/xmpkit/compare/v0.1.2...v0.1.3) - 2026-03-20
 
 ### Added
