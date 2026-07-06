@@ -30,7 +30,7 @@ harness = false
 
 [dependencies]
 # core
-quick-xml = { version = "0.40", features = ["serialize"], optional = true }
+quick-xml = { version = "0.41", features = ["serialize"], optional = true }
 thiserror = "2.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
