@@ -29,7 +29,7 @@
     "@types/jsdom": "^27.0.0",
     "@types/node": "^24.10.2",
     "@vitejs/plugin-vue": "^6.0.7",
-    "@vitejs/plugin-vue-jsx": "^5.1.5",
+    "@vitejs/plugin-vue-jsx": "^5.1.6",
     "@vue/test-utils": "^2.4.11",
     "@vue/tsconfig": "^0.9.1",
     "eslint-plugin-playwright": "^2.10.4",
@@ -39,10 +39,10 @@
     "typescript": "~5.9.0",
     "unplugin-element-plus": "^0.11.2",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plugin-vue-devtools": "^8.1.3",
+    "vite-plugin-vue-devtools": "^8.1.5",
     "vite-plus": "latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "vue-tsc": "^3.3.5"
+    "vue-tsc": "^3.3.7"
   },
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
