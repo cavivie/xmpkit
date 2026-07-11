@@ -1,10 +1,13 @@
 version: 2
 updates:
-  # GitHub Actions - weekly check is enough
+  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Asia/Shanghai"
     commit-message:
       prefix: "chore(ci):"
       include: scope
@@ -13,7 +16,7 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
       day: "monday"
       time: "08:00"
       timezone: "Asia/Shanghai"
