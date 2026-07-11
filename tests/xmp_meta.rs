@@ -168,6 +168,53 @@ mod from_str {
     }
 
     #[test]
+    fn nested_description_attributes_stay_on_array_item() {
+        let xml = r#"
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/">
+  <rdf:Description rdf:about="">
+    <crs:RetouchAreas>
+      <rdf:Seq>
+        <rdf:li>
+          <rdf:Description crs:SourceX="0.262146"
+                           crs:Method="gaussian">
+            <crs:Masks>
+              <rdf:Seq>
+                <rdf:li crs:What="Mask/Ellipse"
+                        crs:X="0.251848"/>
+              </rdf:Seq>
+            </crs:Masks>
+          </rdf:Description>
+        </rdf:li>
+        <rdf:li>
+          <rdf:Description crs:SourceX="0.389982"
+                           crs:Method="gaussian"/>
+        </rdf:li>
+      </rdf:Seq>
+    </crs:RetouchAreas>
+  </rdf:Description>
+</rdf:RDF>"#;
+
+        let m = xml.parse::<XmpMeta>().unwrap();
+        let crs = "http://ns.adobe.com/camera-raw-settings/1.0/";
+
+        assert_eq!(
+            m.get_property(crs, "RetouchAreas[1]/SourceX"),
+            Some(XmpValue::String("0.262146".to_string()))
+        );
+        assert_eq!(
+            m.get_property(crs, "RetouchAreas[2]/SourceX"),
+            Some(XmpValue::String("0.389982".to_string()))
+        );
+        assert_eq!(
+            m.get_property(crs, "RetouchAreas[1]/Masks[1]/What"),
+            Some(XmpValue::String("Mask/Ellipse".to_string()))
+        );
+        assert!(!m.has_property(crs, "SourceX"));
+        assert!(!m.has_property(crs, "Method"));
+    }
+
+    #[test]
     fn parse_mwg_regions_with_description() {
         let xmp_str = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/">
  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">

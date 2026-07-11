@@ -191,7 +191,17 @@ impl XmpParser {
         // Handle RDF Description
         if self.is_description_element(&name) {
             *description_depth += 1;
-            self.handle_description_attributes(&attrs, root, current_qualifiers)?;
+            if *description_depth > 1 {
+                if let Some(frame) = stack.last_mut() {
+                    self.populate_node_from_attributes(
+                        &attrs,
+                        &mut frame.node,
+                        current_qualifiers,
+                    )?;
+                }
+            } else {
+                self.handle_description_attributes(&attrs, root, current_qualifiers)?;
+            }
         }
         // Handle RDF containers (Seq, Bag, Alt)
         else if *description_depth > 0 && self.is_array_container(&name) {
@@ -322,7 +332,17 @@ impl XmpParser {
 
         // Handle RDF Description
         if self.is_description_element(&name) {
-            self.handle_description_attributes(&attrs, root, current_qualifiers)?;
+            if description_depth > 0 {
+                if let Some(frame) = stack.last_mut() {
+                    self.populate_node_from_attributes(
+                        &attrs,
+                        &mut frame.node,
+                        current_qualifiers,
+                    )?;
+                }
+            } else {
+                self.handle_description_attributes(&attrs, root, current_qualifiers)?;
+            }
         } else if description_depth > 0 && !self.is_rdf_element(&name) {
             let colon_pos = name.find(':');
             let key = if let Some(pos) = colon_pos {
