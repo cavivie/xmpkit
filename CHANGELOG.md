@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/cavivie/xmpkit/compare/v0.1.4...v0.1.5) - 2026-07-13
+
+### Fixed
+
+- serialize metadata deterministically ([#130](https://github.com/cavivie/xmpkit/pull/130))
+- keep nested description attributes scoped ([#129](https://github.com/cavivie/xmpkit/pull/129))
+
+### Other
+
+- *(deps)* update vue ecosystem dependencies
+- *(deps)* update playwright
+- *(deps)* update eslint playwright plugin
+- *(deps)* update element plus
+- *(deps)* update lopdf to 0.44
+- *(deps)* update web build tools
+- run dependabot monthly ([#122](https://github.com/cavivie/xmpkit/pull/122))
+- *(deps)* (deps): update lopdf requirement from 0.41 to 0.42 ([#111](https://github.com/cavivie/xmpkit/pull/111))
+- *(ci)* (deps): bump actions/checkout from 6 to 7 ([#110](https://github.com/cavivie/xmpkit/pull/110))
+
 ## [0.1.4](https://github.com/cavivie/xmpkit/compare/v0.1.3...v0.1.4) - 2026-06-16
 
 ### Added
