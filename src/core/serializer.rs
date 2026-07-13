@@ -32,7 +32,7 @@ impl XmpSerializer {
         let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 2);
 
         // Collect namespaces used in the metadata
-        let mut used_namespaces = std::collections::HashMap::new();
+        let mut used_namespaces = indexmap::IndexMap::new();
 
         // Collect simple nodes as attributes and complex nodes as elements
         let mut simple_attrs = Vec::new();
@@ -56,7 +56,6 @@ impl XmpSerializer {
                 }
             }
         }
-
         // Write RDF root element with namespaces
         let mut rdf_start = BytesStart::new("rdf:RDF");
         rdf_start.push_attribute(("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"));
@@ -387,7 +386,7 @@ impl XmpSerializer {
     fn collect_namespaces(
         &self,
         node: &Node,
-        used_namespaces: &mut std::collections::HashMap<String, String>,
+        used_namespaces: &mut indexmap::IndexMap<String, String>,
     ) {
         match node {
             Node::Simple(_) => {}
@@ -491,5 +490,50 @@ mod tests {
         let err = result.unwrap_err();
         let err_msg = err.to_string();
         assert!(err_msg.contains("exceeds target length"));
+    }
+
+    #[test]
+    fn test_serialize_rdf_preserves_insertion_order() {
+        let serializer = XmpSerializer::new();
+        let mut nested = StructureNode::new();
+        nested.set_field("http://ns.adobe.com/exif/1.0/:Zeta", Node::simple("z"));
+        nested.set_field("http://purl.org/dc/elements/1.1/:Alpha", Node::simple("a"));
+
+        let mut second_nested = StructureNode::new();
+        second_nested.set_field("http://ns.adobe.com/exif/1.0/:Beta", Node::simple("b"));
+
+        let mut root = StructureNode::new();
+        root.set_field("http://ns.adobe.com/exif/1.0/:Zeta", Node::simple("z"));
+        root.set_field("http://purl.org/dc/elements/1.1/:Alpha", Node::simple("a"));
+        root.set_field(
+            "http://ns.adobe.com/exif/1.0/:Nested",
+            Node::Structure(nested),
+        );
+        root.set_field(
+            "http://purl.org/dc/elements/1.1/:SecondNested",
+            Node::Structure(second_nested),
+        );
+        root.set_field(
+            "http://ns.adobe.com/exif/1.0/:Zeta",
+            Node::simple("updated"),
+        );
+
+        let rdf = serializer.serialize_rdf(&root).unwrap();
+
+        assert!(
+            rdf.find("exif:Zeta=\"updated\"").unwrap() < rdf.find("dc:Alpha=\"a\"").unwrap(),
+            "root attributes should preserve first insertion order: {}",
+            rdf
+        );
+        assert!(
+            rdf.find("<exif:Nested>").unwrap() < rdf.find("<dc:SecondNested>").unwrap(),
+            "complex nodes should preserve insertion order: {}",
+            rdf
+        );
+        assert!(
+            rdf.find("<exif:Zeta>").unwrap() < rdf.find("<dc:Alpha>").unwrap(),
+            "nested structure fields should preserve insertion order: {}",
+            rdf
+        );
     }
 }

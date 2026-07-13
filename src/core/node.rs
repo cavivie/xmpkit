@@ -7,7 +7,7 @@
 
 use crate::core::error::{XmpError, XmpResult};
 use crate::types::qualifier::Qualifier;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 /// Type of array node
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -158,7 +158,7 @@ impl ArrayNode {
 #[derive(Debug, Clone)]
 pub struct StructureNode {
     /// The fields in the structure
-    pub fields: HashMap<String, Node>,
+    pub fields: IndexMap<String, Node>,
     /// Qualifiers attached to this node
     pub qualifiers: Vec<Qualifier>,
 }
@@ -167,7 +167,7 @@ impl StructureNode {
     /// Create a new structure node
     pub fn new() -> Self {
         Self {
-            fields: HashMap::new(),
+            fields: IndexMap::new(),
             qualifiers: Vec::new(),
         }
     }
@@ -189,7 +189,7 @@ impl StructureNode {
 
     /// Remove a field
     pub fn remove_field(&mut self, name: &str) -> Option<Node> {
-        self.fields.remove(name)
+        self.fields.shift_remove(name)
     }
 
     /// Check if a field exists
