@@ -30,17 +30,25 @@ impl XmpValue {
         }
     }
 
-    /// Get the value as an integer, if it is an integer type
+    /// Get the value as an integer, if it is an integer type, or
+    /// can be converted to.
     pub fn as_int(&self) -> Option<i64> {
         match self {
+            XmpValue::String(s) => s.parse::<i64>().ok(),
             XmpValue::Integer(i) => Some(*i),
             _ => None,
         }
     }
 
-    /// Get the value as a boolean, if it is a boolean type
+    /// Get the value as a boolean, if it is a boolean type, or
+    /// can be converted to.
     pub fn as_bool(&self) -> Option<bool> {
         match self {
+            XmpValue::String(ref s) => match s.as_str() {
+                "True" => Some(true),
+                "False" => Some(false),
+                _ => None,
+            },
             XmpValue::Boolean(b) => Some(*b),
             _ => None,
         }
@@ -117,6 +125,12 @@ mod tests {
         let value = XmpValue::Integer(42);
         assert_eq!(value.as_int(), Some(42));
         assert_eq!(value.to_string(), "42"); // Display trait
+
+        // Type conversion
+        let value = XmpValue::String("42".to_string());
+        assert_eq!(value.as_int(), Some(42));
+        let value = XmpValue::String("abc".to_string());
+        assert_eq!(value.as_int(), None);
     }
 
     #[test]
@@ -124,6 +138,14 @@ mod tests {
         let value = XmpValue::Boolean(true);
         assert_eq!(value.as_bool(), Some(true));
         assert_eq!(value.to_string(), "true"); // Display trait
+
+        // Type conversion
+        let value = XmpValue::String("True".to_string());
+        assert_eq!(value.as_bool(), Some(true));
+        let value = XmpValue::String("False".to_string());
+        assert_eq!(value.as_bool(), Some(false));
+        let value = XmpValue::String("abc".to_string());
+        assert_eq!(value.as_bool(), None);
     }
 
     #[test]
