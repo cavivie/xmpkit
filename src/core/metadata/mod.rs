@@ -172,7 +172,8 @@ impl XmpMeta {
         })
     }
 
-    /// Get a property value
+    /// Get a property value. It will return an `XmpValue::Array(_)`,
+    /// `XmpValue::Structure(_)` or an `XmpValue::String(_)`.
     ///
     /// # Arguments
     ///
@@ -182,19 +183,7 @@ impl XmpMeta {
         let root = root_read_opt!(self.root);
         let (node, _) = self.get_node_by_path(&root, namespace, path)?;
 
-        // Handle simple node
-        if let Some(simple_node) = node.as_simple() {
-            return Some(XmpValue::String(simple_node.value.clone()));
-        }
-
-        // Handle structure node: return empty string
-        // Arrays and non-leaf levels of structs do not have values.
-        // Use get_struct_field() to access individual fields.
-        if node.as_structure().is_some() {
-            return Some(XmpValue::String(String::new()));
-        }
-
-        None
+        Some(node.into())
     }
 
     /// Set a property value
@@ -1371,6 +1360,15 @@ mod tests {
             meta.get_array_size("http://purl.org/dc/elements/1.1/", "creator"),
             Some(2)
         );
+
+        // Test that get_property return an array.
+        let bag = meta.get_property("http://purl.org/dc/elements/1.1/", "creator");
+        assert!(matches!(bag, Some(XmpValue::Array(_))));
+        if let Some(XmpValue::Array(bag)) = bag {
+            assert_eq!(bag.len(), 2);
+            assert_eq!(bag[0], XmpValue::String("Author1".to_string()));
+            assert_eq!(bag[1], XmpValue::String("Author2".to_string()));
+        }
     }
 
     #[test]
@@ -1645,5 +1643,37 @@ mod tests {
         assert_eq!(retrieved.year, 2023);
         assert_eq!(retrieved.month, 12);
         assert_eq!(retrieved.day, 0);
+    }
+
+    #[test]
+    fn test_all_properties() {
+        let xml = r#"<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:lightroom="http://ns.adobe.com/lightroom/1.0/">
+   <xmp:CreatorTool>NIKON Z 7 Ver.03.40</xmp:CreatorTool>
+   <lightroom:hierarchicalSubject>
+    <rdf:Bag>
+     <rdf:li>Thailand</rdf:li>
+     <rdf:li>Thailand|Phuket</rdf:li>
+    </rdf:Bag>
+   </lightroom:hierarchicalSubject>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>"#;
+
+        let meta = XmpMeta::parse(xml).unwrap();
+        let allprops = meta.all_properties();
+        assert_eq!(allprops.len(), 2);
+        assert_eq!(allprops[0].name, "hierarchicalSubject");
+        assert_eq!(allprops[1].name, "CreatorTool");
+
+        let value = meta.get_property("xmp", "CreatorTool");
+        assert!(matches!(value, Some(XmpValue::String(s)) if s == "NIKON Z 7 Ver.03.40"));
+        let value = meta.get_property("lightroom", "hierarchicalSubject");
+        assert!(matches!(value, Some(XmpValue::Array(v)) if v.len() == 2));
     }
 }

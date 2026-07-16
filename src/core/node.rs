@@ -232,6 +232,25 @@ pub enum Node {
     Structure(StructureNode),
 }
 
+impl From<&Node> for crate::XmpValue {
+    fn from(node: &Node) -> Self {
+        match node {
+            Node::Simple(node) => Self::String(node.value.clone()),
+            Node::Array(node) => {
+                let array = node.items.iter().map(|item| item.into()).collect();
+                Self::Array(array)
+            }
+            Node::Structure(node) => {
+                let values = node
+                    .fields
+                    .iter()
+                    .map(|(key, value)| (key.into(), value.into()));
+                Self::Structure(std::collections::HashMap::from_iter(values))
+            }
+        }
+    }
+}
+
 impl Node {
     /// Create a new simple node
     pub fn simple(value: impl Into<String>) -> Self {
@@ -375,6 +394,41 @@ mod tests {
 
         structure.remove_field("field1");
         assert!(!structure.has_field("field1"));
+    }
+
+    #[test]
+    fn test_structure_node_to_value() {
+        use crate::XmpValue;
+
+        let mut node = Node::structure();
+        let value: XmpValue = (&node).into();
+        assert!(matches!(value, XmpValue::Structure(_)));
+        if let XmpValue::Structure(structure) = &value {
+            assert_eq!(structure.len(), 0);
+        } else {
+            unreachable!();
+        }
+
+        if let Some(ref mut structure) = node.as_structure_mut() {
+            structure.set_field("field1", Node::simple("value1"));
+            structure.set_field("field2", Node::simple("value2"));
+            let mut array_node = ArrayNode::new(ArrayType::Unordered);
+            array_node.items.push(Node::simple("item1"));
+            array_node.items.push(Node::simple("item2"));
+            structure.set_field("bag1", Node::Array(array_node));
+        } else {
+            unreachable!();
+        }
+        let value: XmpValue = (&node).into();
+        if let XmpValue::Structure(structure) = &value {
+            assert_eq!(structure.len(), 3);
+            assert!(structure.contains_key("field1"));
+            assert!(matches!(structure.get("field1"), Some(XmpValue::String(s)) if s == "value1"));
+            assert!(structure.contains_key("bag1"));
+            assert!(matches!(structure.get("bag1"), Some(XmpValue::Array(a)) if a.len() == 2));
+        } else {
+            unreachable!();
+        }
     }
 
     #[test]
