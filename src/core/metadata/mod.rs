@@ -31,7 +31,7 @@ pub struct XmpMeta {
 /// A property entry produced by iterating an [`XmpMeta`] instance.
 #[derive(Debug, Clone)]
 pub struct XmpProperty {
-    /// Expanded namespace URI for the property (e.g., "http://ns.adobe.com/xap/1.0/")
+    /// Expanded namespace URI for the property (e.g., `http://ns.adobe.com/xap/1.0/`)
     pub namespace_uri: String,
     /// Property name (e.g., "CreatorTool", "creator", "Flash")
     pub name: String,

@@ -6,7 +6,7 @@
 //! AVI also contains native metadata in LIST/INFO chunks which can be
 //! reconciled into XMP.
 //!
-//! Reference: https://docs.microsoft.com/en-us/windows/win32/directshow/avi-riff-file-reference
+//! Reference: <https://docs.microsoft.com/en-us/windows/win32/directshow/avi-riff-file-reference>
 
 use super::{
     chunk_total_size, copy_chunk, info, read_all_chunks, validate_riff_header, write_chunk,

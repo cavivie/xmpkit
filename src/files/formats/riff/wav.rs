@@ -6,7 +6,7 @@
 //! WAV also contains native metadata in LIST/INFO chunks which can be
 //! reconciled into XMP.
 //!
-//! Reference: http://www-mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
+//! Reference: <http://www-mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html>
 
 use super::{
     chunk_total_size, copy_chunk, info, read_all_chunks, validate_riff_header, write_chunk,
