@@ -1644,4 +1644,36 @@ mod tests {
         assert_eq!(retrieved.month, 12);
         assert_eq!(retrieved.day, 0);
     }
+
+    #[test]
+    fn test_all_properties() {
+        let xml = r#"<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:lightroom="http://ns.adobe.com/lightroom/1.0/">
+   <xmp:CreatorTool>NIKON Z 7 Ver.03.40</xmp:CreatorTool>
+   <lightroom:hierarchicalSubject>
+    <rdf:Bag>
+     <rdf:li>Thailand</rdf:li>
+     <rdf:li>Thailand|Phuket</rdf:li>
+    </rdf:Bag>
+   </lightroom:hierarchicalSubject>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>"#;
+
+        let meta = XmpMeta::parse(xml).unwrap();
+        let allprops = meta.all_properties();
+        assert_eq!(allprops.len(), 2);
+        assert_eq!(allprops[0].name, "hierarchicalSubject");
+        assert_eq!(allprops[1].name, "CreatorTool");
+
+        let value = meta.get_property("xmp", "CreatorTool");
+        assert!(matches!(value, Some(XmpValue::String(s)) if s == "NIKON Z 7 Ver.03.40"));
+        let value = meta.get_property("lightroom", "hierarchicalSubject");
+        assert!(matches!(value, Some(XmpValue::Array(v)) if v.len() == 2));
+    }
 }
