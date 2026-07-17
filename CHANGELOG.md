@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6](https://github.com/cavivie/xmpkit/compare/v0.1.5...v0.1.6) - 2026-07-17
+
+### Added
+
+- value conversions for XmpValue ([#132](https://github.com/cavivie/xmpkit/pull/132))
+
+### Fixed
+
+- Add the <xmpmeta> element to serialization
+- XmpMeta::get_property() returns an Array when appropriate ([#131](https://github.com/cavivie/xmpkit/pull/131))
+
+### Other
+
+- Fix cargo doc warnings with bare URL ([#134](https://github.com/cavivie/xmpkit/pull/134))
+
 ## [0.1.5](https://github.com/cavivie/xmpkit/compare/v0.1.4...v0.1.5) - 2026-07-13
 
 ### Fixed

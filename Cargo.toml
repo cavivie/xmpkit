@@ -1,6 +1,6 @@
 [package]
 name = "xmpkit"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 authors = ["XMPKit Contributors"]
 description = "Pure Rust implementation of Adobe XMP Toolkit"
