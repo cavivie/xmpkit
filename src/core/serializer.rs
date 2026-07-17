@@ -56,6 +56,11 @@ impl XmpSerializer {
                 }
             }
         }
+        let mut meta_start = BytesStart::new("x:xmpmeta");
+        meta_start.push_attribute(("xmlns:x", "adobe:ns:meta/"));
+        meta_start.push_attribute(("x:xmptk", "xmpkit"));
+        writer.write_event(Event::Start(meta_start))?;
+
         // Write RDF root element with namespaces
         let mut rdf_start = BytesStart::new("rdf:RDF");
         rdf_start.push_attribute(("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"));
@@ -106,6 +111,7 @@ impl XmpSerializer {
             writer.write_event(Event::End(BytesEnd::new("rdf:Description")))?;
         }
         writer.write_event(Event::End(BytesEnd::new("rdf:RDF")))?;
+        writer.write_event(Event::End(BytesEnd::new("x:xmpmeta")))?;
 
         let result = writer.into_inner().into_inner();
         String::from_utf8(result)
@@ -519,6 +525,10 @@ mod tests {
         );
 
         let rdf = serializer.serialize_rdf(&root).unwrap();
+        assert!(
+            rdf.starts_with("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"xmpkit\">"),
+            "Missing xmpmeta element"
+        );
 
         assert!(
             rdf.find("exif:Zeta=\"updated\"").unwrap() < rdf.find("dc:Alpha=\"a\"").unwrap(),
