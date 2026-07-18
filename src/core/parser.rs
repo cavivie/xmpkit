@@ -175,6 +175,35 @@ impl XmpParser {
         }
     }
 
+    /// Make an array node at `frame` with element `name`.
+    /// This will replace the frame node.
+    fn make_array_node(name: &str, frame: &mut StackFrame) {
+        use crate::core::node::{ArrayNode, ArrayType};
+
+        let parent = &mut frame.node;
+        let array_type = if name.contains("Seq") {
+            ArrayType::Ordered
+        } else if name.contains("Bag") {
+            ArrayType::Unordered
+        } else {
+            ArrayType::Alternative
+        };
+        let mut array_node = ArrayNode::new(array_type);
+        // Preserve any qualifiers from the parent (e.g. from attributes)
+        match parent {
+            Node::Simple(sn) => {
+                array_node.qualifiers = std::mem::take(&mut sn.qualifiers);
+            }
+            Node::Structure(sn) => {
+                array_node.qualifiers = std::mem::take(&mut sn.qualifiers);
+            }
+            Node::Array(sn) => {
+                array_node.qualifiers = std::mem::take(&mut sn.qualifiers);
+            }
+        }
+        *parent = Node::Array(array_node);
+    }
+
     /// Handle Start element event during RDF parsing
     fn handle_start_element(
         &mut self,
@@ -206,29 +235,7 @@ impl XmpParser {
         // Handle RDF containers (Seq, Bag, Alt)
         else if *description_depth > 0 && self.is_array_container(&name) {
             if let Some(frame) = stack.last_mut() {
-                let parent = &mut frame.node;
-                use crate::core::node::{ArrayNode, ArrayType};
-                let array_type = if name.contains("Seq") {
-                    ArrayType::Ordered
-                } else if name.contains("Bag") {
-                    ArrayType::Unordered
-                } else {
-                    ArrayType::Alternative
-                };
-                let mut array_node = ArrayNode::new(array_type);
-                // Preserve any qualifiers from the parent (e.g. from attributes)
-                match parent {
-                    Node::Simple(sn) => {
-                        array_node.qualifiers = std::mem::take(&mut sn.qualifiers);
-                    }
-                    Node::Structure(sn) => {
-                        array_node.qualifiers = std::mem::take(&mut sn.qualifiers);
-                    }
-                    Node::Array(sn) => {
-                        array_node.qualifiers = std::mem::take(&mut sn.qualifiers);
-                    }
-                }
-                *parent = Node::Array(array_node);
+                Self::make_array_node(&name, frame);
             }
         }
         // Handle li (list item) - add to current array
@@ -344,29 +351,35 @@ impl XmpParser {
                 self.handle_description_attributes(&attrs, root, current_qualifiers)?;
             }
         } else if description_depth > 0 && !self.is_rdf_element(&name) {
-            let colon_pos = name.find(':');
-            let key = if let Some(pos) = colon_pos {
-                let prefix = &name[..pos];
-                let prop_name = &name[pos + 1..];
-                if let Some(ns_uri) = self.namespaces.get_uri(prefix) {
-                    format!("{}:{}", ns_uri, prop_name)
-                } else {
-                    name.clone()
+            if self.is_array_container(&name) {
+                if let Some(frame) = stack.last_mut() {
+                    Self::make_array_node(&name, frame);
                 }
             } else {
-                name.clone()
-            };
+                let colon_pos = name.find(':');
+                let key = if let Some(pos) = colon_pos {
+                    let prefix = &name[..pos];
+                    let prop_name = &name[pos + 1..];
+                    if let Some(ns_uri) = self.namespaces.get_uri(prefix) {
+                        format!("{}:{}", ns_uri, prop_name)
+                    } else {
+                        name.clone()
+                    }
+                } else {
+                    name.clone()
+                };
 
-            let mut node = Node::simple("");
-            if let Node::Simple(sn) = &mut node {
-                sn.qualifiers.extend(current_qualifiers.clone());
-            }
-            self.populate_node_from_attributes(&attrs, &mut node, current_qualifiers)?;
+                let mut node = Node::simple("");
+                if let Node::Simple(sn) = &mut node {
+                    sn.qualifiers.extend(current_qualifiers.clone());
+                }
+                self.populate_node_from_attributes(&attrs, &mut node, current_qualifiers)?;
 
-            if name == "li" || name.ends_with(":li") {
-                Self::insert_node_into_parent(root, stack, "".to_string(), node);
-            } else {
-                Self::insert_node_into_parent(root, stack, key, node);
+                if name == "li" || name.ends_with(":li") {
+                    Self::insert_node_into_parent(root, stack, "".to_string(), node);
+                } else {
+                    Self::insert_node_into_parent(root, stack, key, node);
+                }
             }
         }
         Ok(())
@@ -737,6 +750,31 @@ Line3</test:Multiline>
         let action_key = format!("{}:action", st_evt_uri);
         let action = li.get_field(&action_key).unwrap().as_simple().unwrap();
         assert_eq!(action.value, "saved");
+    }
+
+    #[test]
+    fn test_parse_empty_array() {
+        let mut parser = XmpParser::new();
+        let xml = r#"
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/">
+  <rdf:Description rdf:about="">
+    <xmpMM:History>
+      <rdf:Seq/>
+    </xmpMM:History>
+  </rdf:Description>
+</rdf:RDF>"#;
+
+        let root = parser.parse_rdf(xml).unwrap();
+        let xmp_mm_uri = "http://ns.adobe.com/xap/1.0/mm/";
+
+        let history_key = format!("{}:History", xmp_mm_uri);
+        let history = root
+            .get_field(&history_key)
+            .unwrap()
+            .as_array()
+            .expect("History is not an array");
+        assert_eq!(history.len(), 0);
     }
 
     #[test]
