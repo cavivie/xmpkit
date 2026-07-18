@@ -224,21 +224,26 @@ impl XmpSerializer {
         let prop_elem = format!("{}:{}", prefix, prop_name);
         writer.write_event(Event::Start(BytesStart::new(&prop_elem)))?;
 
-        // Write container element
-        writer.write_event(Event::Start(BytesStart::new(container_name)))?;
+        if !node.items.is_empty() {
+            // Write container element
+            writer.write_event(Event::Start(BytesStart::new(container_name)))?;
 
-        // Write list items
-        for item in &node.items {
-            let mut li_start = BytesStart::new("rdf:li");
-            self.add_lang_qualifier_attributes(item, &mut li_start);
-            writer.write_event(Event::Start(li_start))?;
+            // Write list items
+            for item in &node.items {
+                let mut li_start = BytesStart::new("rdf:li");
+                self.add_lang_qualifier_attributes(item, &mut li_start);
+                writer.write_event(Event::Start(li_start))?;
 
-            self.serialize_array_item(writer, item)?;
+                self.serialize_array_item(writer, item)?;
 
-            writer.write_event(Event::End(BytesEnd::new("rdf:li")))?;
+                writer.write_event(Event::End(BytesEnd::new("rdf:li")))?;
+            }
+
+            writer.write_event(Event::End(BytesEnd::new(container_name)))?;
+        } else {
+            // Write container empty element
+            writer.write_event(Event::Empty(BytesStart::new(container_name)))?;
         }
-
-        writer.write_event(Event::End(BytesEnd::new(container_name)))?;
         writer.write_event(Event::End(BytesEnd::new(&prop_elem)))?;
         Ok(())
     }
@@ -545,5 +550,23 @@ mod tests {
             "nested structure fields should preserve insertion order: {}",
             rdf
         );
+    }
+
+    #[test]
+    /// Test that serializing an empty array generates an empty
+    /// element tag.
+    fn test_serialize_empty_array() {
+        let serializer = XmpSerializer::new();
+        let mut root = StructureNode::new();
+        root.set_field(
+            "http://purl.org/dc/elements/1.1/:creator".to_string(),
+            Node::array(ArrayType::Ordered),
+        );
+        let result = serializer.serialize_packet(&root);
+        assert!(result.is_ok());
+        let packet = result.unwrap();
+        eprintln!("Serialized packet:\n{}", packet);
+        assert!(packet.contains("<rdf:Seq/>"));
+        assert!(packet.contains("dc:creator"));
     }
 }
