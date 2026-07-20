@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7](https://github.com/cavivie/xmpkit/compare/v0.1.6...v0.1.7) - 2026-07-20
+
+### Fixed
+
+- *(serializer)* Write empty array as empty element ([#139](https://github.com/cavivie/xmpkit/pull/139))
+- *(parser)* Properly parse empty array ([#136](https://github.com/cavivie/xmpkit/pull/136))
+
+### Other
+
+- *(deps)* Update quick-xml to 0.41 ([#137](https://github.com/cavivie/xmpkit/pull/137))
+
 ## [0.1.6](https://github.com/cavivie/xmpkit/compare/v0.1.5...v0.1.6) - 2026-07-17
 
 ### Added
