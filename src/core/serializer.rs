@@ -263,9 +263,9 @@ impl XmpSerializer {
         let prop_elem = format!("{}:{}", prefix, prop_name);
         writer.write_event(Event::Start(BytesStart::new(&prop_elem)))?;
 
-        // Write structure as nested Description with rdf:parseType="Resource"
+        // Write structure as nested Description
         let mut desc_start = BytesStart::new("rdf:Description");
-        desc_start.push_attribute(("rdf:parseType", "Resource"));
+        desc_start.push_attribute(("rdf:about", ""));
         writer.write_event(Event::Start(desc_start))?;
 
         // Write fields
@@ -316,7 +316,9 @@ impl XmpSerializer {
                 writer.write_event(Event::Text(BytesText::new(&simple.value)))?;
             }
             Node::Structure(structure) => {
-                writer.write_event(Event::Start(BytesStart::new("rdf:Description")))?;
+                let mut desc_start = BytesStart::new("rdf:Description");
+                desc_start.push_attribute(("rdf:about", ""));
+                writer.write_event(Event::Start(desc_start))?;
                 for (key, value) in &structure.fields {
                     self.serialize_node(writer, key, value)?;
                 }
@@ -568,5 +570,54 @@ mod tests {
         eprintln!("Serialized packet:\n{}", packet);
         assert!(packet.contains("<rdf:Seq/>"));
         assert!(packet.contains("dc:creator"));
+    }
+
+    /// check for the first occurance of `tag` element the `needle`
+    /// inside `rdf`. Return the slice starting at the end of the tag
+    /// if found.
+    fn check_tag_range<'a>(rdf: &'a str, tag: &str, needle: &str) -> Option<&'a str> {
+        let start_tag = rdf.find(&format!("<{tag} "))?;
+        let end_tag = rdf[start_tag..].find(">")? + start_tag;
+        rdf[start_tag..end_tag].find(needle)?;
+
+        Some(&rdf[end_tag..])
+    }
+
+    #[test]
+    fn test_serialize_rdf_description_attributes() {
+        let serializer = XmpSerializer::new();
+        let mut root = StructureNode::new();
+        root.set_field(
+            "http://ns.adobe.com/xap/1.0/:CreatorTool".to_string(),
+            Node::simple("TestApp".to_string()),
+        );
+        let mut array = ArrayNode::new(ArrayType::Ordered);
+        let mut nested = StructureNode::new();
+        nested.set_field("http://ns.adobe.com/exif/1.0/:Zeta", Node::simple("z"));
+        nested.set_field("http://purl.org/dc/elements/1.1/:Alpha", Node::simple("a"));
+        array.append(Node::Structure(nested));
+        let mut second_nested = StructureNode::new();
+        second_nested.set_field("http://ns.adobe.com/exif/1.0/:Beta", Node::simple("b"));
+
+        root.set_field("http://ns.adobe.com/exif/1.0/:Nested", Node::Array(array));
+        root.set_field(
+            "http://purl.org/dc/elements/1.1/:SecondNested",
+            Node::Structure(second_nested),
+        );
+        let result = serializer.serialize_rdf(&root);
+        assert!(result.is_ok());
+
+        let rdf = result.unwrap();
+        let mut start = &rdf[0..];
+        assert!(check_tag_range(start, "rdf:Description", "rdf:parseType=\"Resource\"").is_none());
+        start = check_tag_range(start, "rdf:Description", "rdf:about=\"\" ").unwrap();
+        let pos = start.find("<exif:Nested>").unwrap();
+        start = &start[pos..];
+        assert!(check_tag_range(start, "rdf:Description", "rdf:parseType=\"Resource\"").is_none());
+        start = check_tag_range(start, "rdf:Description", "rdf:about=\"\"").unwrap();
+        let pos = start.find("<dc:SecondNested>").unwrap();
+        start = &start[pos..];
+        assert!(check_tag_range(start, "rdf:Description", "rdf:parseType=\"Resource\"").is_none());
+        check_tag_range(start, "rdf:Description", "rdf:about=\"\"").unwrap();
     }
 }
