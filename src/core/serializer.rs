@@ -4,10 +4,16 @@
 
 use crate::core::error::{XmpError, XmpResult};
 use crate::core::namespace::{ns, NamespaceMap};
-use crate::core::node::{ArrayNode, ArrayType, Node, StructureNode};
+use crate::core::node::{ArrayNode, ArrayType, Node, SimpleNode, StructureNode};
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
-use quick_xml::Writer;
+use quick_xml::{ElementWriter, Writer};
 use std::io::Cursor;
+
+#[derive(Default)]
+struct ParsedNode {
+    simple_attrs: Vec<(String, String)>,
+    complex_nodes: Vec<(String, Node)>,
+}
 
 /// Serializer for XMP Packets
 pub struct XmpSerializer {
@@ -88,27 +94,28 @@ impl XmpSerializer {
         writer.write_event(Event::Start(rdf_start))?;
 
         // Write Description element with attributes and nested elements
-        let mut desc_start = BytesStart::new("rdf:Description");
-        desc_start.push_attribute(("rdf:about", ""));
+        let mut desc_start = writer
+            .create_element("rdf:Description")
+            .with_attribute(("rdf:about", ""));
 
         // Add simple attributes to Description
         for (attr_name, attr_value) in &simple_attrs {
-            desc_start.push_attribute((attr_name.as_str(), attr_value.as_str()));
+            desc_start = desc_start.with_attribute((attr_name.as_str(), attr_value.as_str()));
         }
 
         // If there are no complex nodes, use Empty (self-closing) tag
         // Otherwise use Start/End tags
         if complex_nodes.is_empty() {
-            writer.write_event(Event::Empty(desc_start))?;
+            desc_start.write_empty()?;
         } else {
-            writer.write_event(Event::Start(desc_start))?;
-
-            // Serialize complex nodes as nested elements
-            for (key, node) in &complex_nodes {
-                self.serialize_node(&mut writer, key, node)?;
-            }
-
-            writer.write_event(Event::End(BytesEnd::new("rdf:Description")))?;
+            desc_start.write_inner_content(|writer| {
+                // Serialize complex nodes as nested elements
+                for (key, node) in &complex_nodes {
+                    self.serialize_node(writer, key, node)
+                        .map_err(|err| std::io::Error::other(err.to_string()))?;
+                }
+                Ok(())
+            })?;
         }
         writer.write_event(Event::End(BytesEnd::new("rdf:RDF")))?;
         writer.write_event(Event::End(BytesEnd::new("x:xmpmeta")))?;
@@ -191,14 +198,11 @@ impl XmpSerializer {
             .ok_or_else(|| XmpError::BadXPath(format!("Invalid path format: {}", path)))?;
 
         let elem_name = format!("{}:{}", prefix, prop_name);
-        let mut elem_start = BytesStart::new(&elem_name);
-
-        // Add qualifiers as attributes (e.g., xml:lang)
-        self.add_lang_qualifier_attributes(&Node::Simple(node.clone()), &mut elem_start);
-
-        writer.write_event(Event::Start(elem_start))?;
-        writer.write_event(Event::Text(BytesText::new(&node.value)))?;
-        writer.write_event(Event::End(BytesEnd::new(&elem_name)))?;
+        writer
+            .create_element(&elem_name)
+            // Add qualifiers as attributes (e.g., xml:lang)
+            .with_attributes(Self::get_lang_qualifier_attributes(node))
+            .write_text_content(BytesText::new(&node.value))?;
 
         Ok(())
     }
@@ -230,13 +234,14 @@ impl XmpSerializer {
 
             // Write list items
             for item in &node.items {
-                let mut li_start = BytesStart::new("rdf:li");
-                self.add_lang_qualifier_attributes(item, &mut li_start);
-                writer.write_event(Event::Start(li_start))?;
+                let mut ewriter = writer.create_element("rdf:li");
 
-                self.serialize_array_item(writer, item)?;
+                if let Node::Simple(simple) = item {
+                    let attrs = Self::get_lang_qualifier_attributes(simple);
+                    ewriter = ewriter.with_attributes(attrs);
+                }
 
-                writer.write_event(Event::End(BytesEnd::new("rdf:li")))?;
+                self.serialize_array_item(ewriter, item)?;
             }
 
             writer.write_event(Event::End(BytesEnd::new(container_name)))?;
@@ -248,6 +253,68 @@ impl XmpSerializer {
         Ok(())
     }
 
+    /// Parse a structure node for serialization splitting simple and
+    /// complex nodes.
+    fn parse_structure_node(&self, node: &StructureNode) -> ParsedNode {
+        let mut parsed_node = ParsedNode::default();
+
+        for (key, node) in &node.fields {
+            let parsed_path = self.parse_path_with_namespace(key);
+
+            if self.should_serialize_as_element(key, node) {
+                parsed_node.complex_nodes.push((key.clone(), node.clone()));
+            } else if let Some((prefix, prop_name, _)) = parsed_path {
+                if let Node::Simple(simple) = node {
+                    parsed_node
+                        .simple_attrs
+                        .push((format!("{}:{}", prefix, prop_name), simple.value.clone()));
+                } else {
+                    parsed_node.complex_nodes.push((key.clone(), node.clone()));
+                }
+            }
+        }
+        parsed_node
+    }
+
+    fn serialize_structure_node_array_item(
+        &self,
+        writer: ElementWriter<'_, Cursor<Vec<u8>>>,
+        node: &StructureNode,
+    ) -> XmpResult<()> {
+        let parsed_nodes = self.parse_structure_node(node);
+        if parsed_nodes.complex_nodes.is_empty() {
+            // Add simple attributes to Description
+            writer
+                .with_attributes(
+                    parsed_nodes
+                        .simple_attrs
+                        .iter()
+                        .map(|(name, value)| (name.as_str(), value.as_str())),
+                )
+                .write_empty()?;
+        } else {
+            // Write fields
+            writer.write_inner_content(|writer| {
+                let ewriter = writer.create_element("rdf:Description").with_attributes(
+                    parsed_nodes
+                        .simple_attrs
+                        .iter()
+                        .map(|(name, value)| (name.as_str(), value.as_str())),
+                );
+                ewriter.write_inner_content(|writer| {
+                    // Serialize complex nodes as nested elements
+                    for (key, node) in &parsed_nodes.complex_nodes {
+                        self.serialize_node(writer, key, node)
+                            .map_err(|err| std::io::Error::other(err.to_string()))?;
+                    }
+                    Ok(())
+                })?;
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+
     /// Serialize a structure node
     fn serialize_structure_node(
         &self,
@@ -255,26 +322,38 @@ impl XmpSerializer {
         path: &str,
         node: &StructureNode,
     ) -> XmpResult<()> {
+        // Write property element containing the structure
         let (prefix, prop_name) = self
             .parse_path(path)
             .ok_or_else(|| XmpError::BadXPath(format!("Invalid path format: {}", path)))?;
 
-        // Write property element containing the structure
+        let parsed_node = self.parse_structure_node(node);
         let prop_elem = format!("{}:{}", prefix, prop_name);
-        writer.write_event(Event::Start(BytesStart::new(&prop_elem)))?;
 
-        // Write structure as nested Description with rdf:parseType="Resource"
-        let mut desc_start = BytesStart::new("rdf:Description");
-        desc_start.push_attribute(("rdf:parseType", "Resource"));
-        writer.write_event(Event::Start(desc_start))?;
+        // Write structure as nested fields
+        let ewriter = writer
+            .create_element(&prop_elem)
+            // Add simple attributes to Description
+            .with_attributes(
+                parsed_node
+                    .simple_attrs
+                    .iter()
+                    .map(|(name, value)| (name.as_str(), value.as_str())),
+            );
 
-        // Write fields
-        for (key, value) in &node.fields {
-            self.serialize_node(writer, key, value)?;
+        if parsed_node.complex_nodes.is_empty() {
+            ewriter.write_empty()?;
+        } else {
+            // Write fields
+            ewriter.write_inner_content(|writer| {
+                // Serialize complex nodes as nested elements
+                for (key, node) in &parsed_node.complex_nodes {
+                    self.serialize_node(writer, key, node)
+                        .map_err(|err| std::io::Error::other(err.to_string()))?;
+                }
+                Ok(())
+            })?;
         }
-
-        writer.write_event(Event::End(BytesEnd::new("rdf:Description")))?;
-        writer.write_event(Event::End(BytesEnd::new(&prop_elem)))?;
         Ok(())
     }
 
@@ -292,35 +371,34 @@ impl XmpSerializer {
             .any(|q| q.namespace == ns::XML && q.name == "lang")
     }
 
-    /// Add language qualifier attributes to an element
-    fn add_lang_qualifier_attributes(&self, node: &Node, elem_start: &mut BytesStart) {
-        let Node::Simple(simple) = node else {
-            return;
-        };
-
-        for qualifier in &simple.qualifiers {
-            if qualifier.namespace == ns::XML && qualifier.name == "lang" {
-                elem_start.push_attribute(("xml:lang", qualifier.value.as_str()));
-            }
-        }
+    /// Get the language qualifier attributes for an element
+    fn get_lang_qualifier_attributes<'a>(
+        node: &'a SimpleNode,
+    ) -> Vec<(&'static str, std::borrow::Cow<'a, str>)> {
+        node.qualifiers
+            .iter()
+            .filter_map(|qualifier| {
+                if qualifier.namespace == ns::XML && qualifier.name == "lang" {
+                    Some(("xml:lang", std::borrow::Cow::from(&qualifier.value)))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Serialize an array item
     fn serialize_array_item(
         &self,
-        writer: &mut Writer<Cursor<Vec<u8>>>,
+        writer: ElementWriter<'_, Cursor<Vec<u8>>>,
         item: &Node,
     ) -> XmpResult<()> {
         match item {
             Node::Simple(simple) => {
-                writer.write_event(Event::Text(BytesText::new(&simple.value)))?;
+                writer.write_text_content(BytesText::new(&simple.value))?;
             }
             Node::Structure(structure) => {
-                writer.write_event(Event::Start(BytesStart::new("rdf:Description")))?;
-                for (key, value) in &structure.fields {
-                    self.serialize_node(writer, key, value)?;
-                }
-                writer.write_event(Event::End(BytesEnd::new("rdf:Description")))?;
+                self.serialize_structure_node_array_item(writer, structure)?;
             }
             Node::Array(_) => {
                 return Err(XmpError::NotSupported(
@@ -540,13 +618,15 @@ mod tests {
             "root attributes should preserve first insertion order: {}",
             rdf
         );
+        let nested_pos = rdf.find("<exif:Nested ").unwrap();
         assert!(
-            rdf.find("<exif:Nested>").unwrap() < rdf.find("<dc:SecondNested>").unwrap(),
+            nested_pos < rdf.find("<dc:SecondNested ").unwrap(),
             "complex nodes should preserve insertion order: {}",
             rdf
         );
+        let rdf = &rdf[nested_pos..];
         assert!(
-            rdf.find("<exif:Zeta>").unwrap() < rdf.find("<dc:Alpha>").unwrap(),
+            rdf.find("exif:Zeta=\"z\"").unwrap() < rdf.find("dc:Alpha=\"a\"").unwrap(),
             "nested structure fields should preserve insertion order: {}",
             rdf
         );
